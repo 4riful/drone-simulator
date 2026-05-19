@@ -618,9 +618,19 @@ function makeRoomCode(){
 function getRoomFromUrl(){
     return normalizeRoomId(new URLSearchParams(location.search).get('room'));
 }
+function getBootParams(){
+    const params = new URLSearchParams(location.search);
+    return {
+        mode: params.get('mode') || '',
+        aircraft: params.get('aircraft') || '',
+        room: normalizeRoomId(params.get('room'))
+    };
+}
 function roomInviteUrl(){
     const room = normalizeRoomId(onlineConfig.room);
-    const url = new URL(location.href);
+    const url = new URL('./game.html', location.href);
+    url.searchParams.set('mode', 'multiplayer');
+    url.searchParams.set('aircraft', controlCfg.vehicleMode === 'helicopter' ? 'helicopter' : 'drone');
     url.searchParams.set('room', room || makeRoomCode());
     return url.toString();
 }
@@ -3168,6 +3178,14 @@ applyVehicleMode();
     await loadOnlineConfig();
     await refreshProfilesUI();
     await refreshRunStats();
+    const boot = getBootParams();
+    if(boot.mode && GAME_MODES[boot.mode]) setGameMode(boot.mode);
+    if(boot.aircraft) {
+        setVehicleMode(boot.aircraft === 'helicopter' ? 'helicopter' : 'drone');
+        await saveControlSettings();
+    }
+    if(boot.room) await saveOnlineRoom(boot.room);
+    if(boot.mode || boot.aircraft) setTimeout(startGame, 250);
 })();
 
 /* Objective system */

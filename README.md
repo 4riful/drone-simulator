@@ -6,11 +6,11 @@ Browser-playable drone simulator prototype built with Three.js, a terminal-style
 
 ## Status
 
-This project is playable today, but it is still a simulator-game prototype. The UI now separates the product concepts clearly: single-player, training, mission, free-flight, profile personas, and an experimental online lab. The current flight controller is assisted and partly game-like; `docs/FLIGHT_MODEL_PLAN.md` documents the next step toward a force/torque model.
+This project is playable today, but it is still a simulator-game prototype. The public homepage is separated from the gameplay page so the first screen stays clean, responsive, and does not load the WebGL runtime in the background. The current flight controller is assisted and partly game-like; `docs/FLIGHT_MODEL_PLAN.md` documents the next step toward a force/torque model.
 
 ## Current Features
 
-- Playable directly from GitHub Pages.
+- Playable directly from GitHub Pages with a dedicated landing page and gameplay page.
 - Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
 - Game modes: Single, Training, Mission, Free Flight, and Online Lab.
@@ -85,14 +85,17 @@ npm run preview
 
 ## Project Shape
 
-- `index.html`: playable document shell, menu screens, HUD, help, and static markup.
+- `index.html`: standalone responsive landing page for mode, aircraft, launch, and build information.
+- `game.html`: playable simulator page with menu screens, HUD, help, and runtime markup.
+- `src/home.css`: landing page styling.
+- `src/home.js`: landing page selection and launch-link logic.
 - `src/styles.css`: terminal UI, cockpit HUD, menu, profile, help, and responsive styling.
 - `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
 - `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
 - `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Lab rooms.
 - `check-module.mjs`: syntax check for the simulator module.
 - `ROADMAP.md`: phased project direction.
-- `ATTRIBUTIONS.md`: author and open-resource credits.
+- `ATTRIBUTIONS.md`: open-resource credits.
 
 ## Theme And Resources
 
