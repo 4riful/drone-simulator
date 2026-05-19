@@ -1,23 +1,64 @@
 # Drone Simulator
 
-A browser-based drone simulator game built with Three.js. The current app is now split into an HTML shell, stylesheet, and simulator module, with a local development workflow around it.
+Browser-playable drone simulator prototype built with Three.js, a terminal-style cockpit UI, local pilot profiles, multiple game modes, and a roadmap toward a more physically correct flight model.
+
+**Play now:** https://4riful.github.io/drone-simulator/
+
+**Repository:** https://github.com/4riful/drone-simulator
+
+**Author:** [Ariful Anik / 4riful](https://github.com/4riful)
+
+## Status
+
+This project is playable today, but it is still a simulator-game prototype. The UI now separates the product concepts clearly: single-player, training, mission, free-flight, profile personas, and an experimental online lab. The current flight controller is assisted and partly game-like; `docs/FLIGHT_MODEL_PLAN.md` documents the next step toward a force/torque model.
 
 ## Current Features
 
+- Playable directly from GitHub Pages.
 - Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
-- Assisted real-world flight controller with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, and GPS status.
+- Game modes: Single, Training, Mission, Free Flight, and Online Lab placeholder.
+- Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time.
+- Profile personas: Recon Specialist, Combat Pilot, Test Pilot, and Instructor.
+- Assisted flight systems with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, GPS status, and warning messages.
 - Combat loop with hostile drones, lock/follow assist, projectiles, explosions, health, score, waypoints, orbs, and power-ups.
-- HUD instruments for heading, speed, altitude, attitude, hull, boost, fuel, battery, signal, GPS, air density, threats, and mission warnings.
-- IndexedDB-backed pilot profiles, run history, settings, and statistics.
+- HUD instruments for heading, speed, altitude, attitude, hull, boost, fuel, battery, signal, GPS, air density, threats, mode, and mission warnings.
+- Help screen with controls, mode explanations, profile notes, and simulator limitations.
 - Keyboard, mouse, and gamepad support.
 
-## Requirements
+## Online Multiplayer Reality
+
+GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The in-game **Online Lab** is intentionally marked experimental until one of these backends is connected:
+
+- Supabase Realtime for lightweight rooms and ghost/co-op drones.
+- WebRTC with a signaling service for peer-hosted sessions.
+- Node WebSocket server on Render, Fly.io, Railway, or similar.
+- Colyseus or PartyKit for a more game-specific networking layer.
+
+The first recommended multiplayer milestone is ghost/co-op presence: room code, callsign, aircraft, position, rotation, health, and mission state. Combat synchronization should come later with validation.
+
+## Controls
+
+- `W/S` or arrow up/down: pitch forward/back.
+- `A/D`: roll/strafe left/right.
+- `Q/E` or arrow left/right: yaw.
+- `Space`: climb.
+- `Shift`: descend.
+- `F` or mouse: fire.
+- `Tab`: boost.
+- `B` or `Ctrl`: emergency brake.
+- `T`: lock target.
+- `L`: follow locked target.
+- `H`: help.
+- `Esc` or `P`: pause.
+- Gamepad Mode 2 is supported when connected.
+
+## Development
+
+Requirements:
 
 - Node.js 18 or newer.
 - A modern browser with WebGL support.
-
-## Development
 
 Install dependencies:
 
@@ -43,26 +84,14 @@ Preview a production-style local server:
 npm run preview
 ```
 
-## Controls
-
-- `W/S` or arrow up/down: pitch forward/back.
-- `A/D`: roll/strafe left/right.
-- `Q/E` or arrow left/right: yaw.
-- `Space`: climb.
-- `Shift`: descend.
-- `F` or mouse: fire.
-- `Tab`: boost.
-- `B` or `Ctrl`: emergency brake.
-- Gamepad Mode 2 is supported when connected.
-
 ## Project Shape
 
-- `index.html`: the playable simulator document shell.
-- `src/styles.css`: visual design, HUD, menu, and screen styling.
-- `src/main.js`: Three.js simulator logic, game state, world generation, flight model, HUD updates, audio, storage, and input handling.
-- `package.json`: local dev, preview, and check scripts.
-- `check-module.mjs`: runs `node --check` against the simulator module.
-- `ROADMAP.md`: technical direction for turning the prototype into a maintainable simulator project.
+- `index.html`: playable document shell, menu screens, HUD, help, and static markup.
+- `src/styles.css`: terminal UI, cockpit HUD, menu, profile, help, and responsive styling.
+- `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
+- `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
+- `check-module.mjs`: syntax check for the simulator module.
+- `ROADMAP.md`: phased project direction.
 - `ATTRIBUTIONS.md`: author and open-resource credits.
 
 ## Theme And Resources
@@ -71,8 +100,20 @@ npm run preview
 - JetBrains Mono font, licensed under OFL-1.1.
 - Tabler Icons visual language, licensed under MIT.
 - Three.js powers the procedural 3D graphics.
-- Author: Ariful Anik / `4riful`.
+- Game visuals are generated procedurally in code.
 
-## Notes
+## Roadmap
 
-The app currently imports Three.js from a CDN inside `src/main.js`. A future refactor should install Three.js locally and convert the simulator into separate systems for physics, world generation, HUD, audio, persistence, and input.
+- Split `src/main.js` into focused modules for state, storage, input, UI, world, entities, and simulation.
+- Install Three.js locally instead of importing it from a CDN.
+- Replace the assisted target-velocity controller with a real force/torque flight model.
+- Add training lessons, landing scoring, debriefs, telemetry replay, and better mission design.
+- Connect a realtime backend for actual online rooms.
+- Add automated browser smoke tests.
+
+## Known Limitations
+
+- The current flight loop still uses target horizontal and vertical velocities rather than full rigid-body physics.
+- Online Lab is a UI/product shell only until a backend is selected.
+- Profile data is local to the browser through IndexedDB/localStorage fallback.
+- No official license file has been added yet.

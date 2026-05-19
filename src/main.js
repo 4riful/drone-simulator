@@ -35,19 +35,33 @@ const C = {
     maxHP: 150, bldgDmg: 15, enemyDmg: 12, orbHeal: 35,
     ringPts: 100, killPts: 250,
 };
-const S = { mode:'menu', hp:C.maxHP, score:0, kills:0, rings:0, dist:0, boost:100, boosting:false, invTimer:0 };
+const S = { mode:'menu', gameMode:'single', hp:C.maxHP, score:0, kills:0, rings:0, dist:0, boost:100, boosting:false, invTimer:0 };
 const WORLD = { fuel:100, windSpeed:0, windDir:0, missionSec:0, batteryV:25.2, signal:100, gps:'3D', airDensity:1, gust:0, turbulence:0, warning:'' };
 let activeProfileId = 'pilot_guest';
-let activeProfile = { id:'pilot_guest', name:'Viper-1' };
+let activeProfile = { id:'pilot_guest', name:'Viper-1', persona:'recon', preferredMode:'single' };
+let selectedPersona = 'recon';
 let fuelWarned = false;
 let fuelEmpty = false;
 let fuelCountdown = -1;
 let fuelFalling = false;
 let lastImpactAt = 0;
 const GAME_META = {
-    version: 'v3.1.0',
+    version: 'v3.2.0',
     coder: 'Ariful Anik / 4riful',
-    note: 'Terminal simulator theme'
+    note: 'Profile modes and realism roadmap'
+};
+const GAME_MODES = {
+    single: { label:'Single', brief:'Single pilot combat sortie. Existing systems stay enabled.', enemies:true, scoreMul:1, fuelStart:100, objective:true },
+    training: { label:'Training', brief:'Flight school mode: no hostile drones, slower scoring, safer fuel reserve.', enemies:false, scoreMul:0.35, fuelStart:100, objective:false },
+    mission: { label:'Mission', brief:'Full mission profile: hostile drones, objectives, and higher score weight.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
+    freeflight: { label:'Free Flight', brief:'Open practice mode: explore, land, and tune controls without combat.', enemies:false, scoreMul:0, fuelStart:100, objective:false },
+    multiplayer: { label:'Online Lab', brief:'Experimental multiplayer shell. GitHub Pages needs Supabase/WebRTC/Socket backend before real live rooms.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
+};
+const PERSONAS = {
+    recon: { label:'Recon Specialist', rank:'ISR-2', badge:'RECON', brief:'Stable sensor-first pilot. Better signal discipline, lighter combat bonus.', signalBonus:8, scoreMul:0.95, fuelMul:0.96 },
+    combat: { label:'Combat Pilot', rank:'CMB-3', badge:'STRIKE', brief:'Aggressive weapons pilot. Higher kill score, heavier fuel burn.', signalBonus:0, scoreMul:1.12, fuelMul:1.08 },
+    test: { label:'Test Pilot', rank:'X-1', badge:'TEST', brief:'Experimental airframe evaluator. Better speed envelope, rougher turbulence exposure.', signalBonus:2, scoreMul:1.0, fuelMul:1.02 },
+    instructor: { label:'Instructor', rank:'IP-1', badge:'TRAIN', brief:'Training-focused operator. Smoother missions and stronger learning profile.', signalBonus:5, scoreMul:0.9, fuelMul:0.92 }
 };
 const CONTROL_DEFAULT = {
     deadzone: 0.08,
@@ -187,7 +201,9 @@ async function ensureDefaultProfile(){
         totalDistance: 0,
         totalKills: 0,
         totalRings: 0,
-        totalTime: 0
+        totalTime: 0,
+        persona: 'recon',
+        preferredMode: 'single'
     };
     await dbSaveProfile(p);
     await dbSetSetting('activeProfileId', p.id);
@@ -2145,8 +2161,8 @@ function addCombo(){
     comboCount++; comboTimer=3;
     if(comboCount>1){
         const bonus=comboCount*50;
-        S.score+=bonus;
-        notify('x'+comboCount+' MULTI-KILL +'+bonus,'kill-note');
+        const pts = addScore(bonus);
+        notify('x'+comboCount+' MULTI-KILL +'+pts,'kill-note');
         if(comboCount>=2) setTimeout(()=>radioSpeak('combo'),1200);
     }
 }
@@ -2215,7 +2231,7 @@ function updRings(dt){
         if(r.userData.glowDisc) r.userData.glowDisc.material.opacity=0.06+Math.sin(t*3+r.position.x)*0.04;
         r.position.y=r.userData.baseY+Math.sin(t*0.8+r.position.x*0.1)*1.5;
         if(drone.position.distanceTo(r.position)<5.0){
-            r.userData.got=true;r.visible=false;S.rings++;S.score+=C.ringPts;WORLD.fuel=Math.min(100,WORLD.fuel+20);sndRing();vib(80,.2,.3);notify('+'+C.ringPts+' WAYPOINT SECURED  +20% FUEL','ring-note');if(Math.random()<0.4)setTimeout(()=>radioSpeak('ring'),600);
+            const pts=addScore(C.ringPts);r.userData.got=true;r.visible=false;S.rings++;WORLD.fuel=Math.min(100,WORLD.fuel+20);sndRing();vib(80,.2,.3);notify('+'+pts+' WAYPOINT SECURED  +20% FUEL','ring-note');if(Math.random()<0.4)setTimeout(()=>radioSpeak('ring'),600);
             setTimeout(()=>{const hf=C.citySize/2-25;r.position.set((Math.random()-.5)*hf*2,8+Math.random()*55,(Math.random()-.5)*hf*2);r.userData.baseY=r.position.y;r.userData.got=false;r.visible=true;},12000);
         }
     }
@@ -2301,7 +2317,7 @@ function updBullets(dt){
         for(let j=enemies.length-1;j>=0;j--){
             if(b.position.distanceTo(enemies[j].position)<2.8){
                 enemies[j].userData.hp--;
-                if(enemies[j].userData.hp<=0){boom(enemies[j].position.clone());scene.remove(enemies[j]);enemies.splice(j,1);S.kills++;S.score+=C.killPts;sndBoom(true);vib(160,.55,.75);addCombo();notify('+'+C.killPts+' HOSTILE NEUTRALIZED','kill-note');setTimeout(mkEnemy,15000);setTimeout(()=>radioSpeak('kill'),800);}
+                if(enemies[j].userData.hp<=0){const pts=addScore(C.killPts);boom(enemies[j].position.clone());scene.remove(enemies[j]);enemies.splice(j,1);S.kills++;sndBoom(true);vib(160,.55,.75);addCombo();notify('+'+pts+' HOSTILE NEUTRALIZED','kill-note');if(getModeCfg().enemies)setTimeout(mkEnemy,15000);setTimeout(()=>radioSpeak('kill'),800);}
                 else{sndBoom(false);vib(80,.3,.4);boom(b.position.clone(),true);}
                 retireBullet(b);hit=true;break;
             }
@@ -2393,6 +2409,7 @@ window.addEventListener('keydown',e=>{
     keys[e.code]=true;
     if(e.code==='Escape'||e.code==='KeyP') togglePause();
     if(e.code==='KeyG'){ headlightOn=!headlightOn; headlight.visible=headlightOn; }
+    if(e.code==='KeyH') openHelp();
     if(e.code==='KeyC'){ camFar=!camFar; }
     if(e.code==='KeyT') toggleLockTarget();
     if(e.code==='KeyL' && lockTarget){ lockFollow=!lockFollow; notify(lockFollow?'FOLLOW ASSIST ON':'FOLLOW ASSIST OFF','ring-note'); }
@@ -2543,12 +2560,13 @@ function gameOver(){
     }catch(_){}
     dbAddRun({
         score:S.score, dist:S.dist, kills:S.kills, rings:S.rings,
-        ts:Date.now(), version:GAME_META.version, profileId: activeProfileId
+        ts:Date.now(), version:GAME_META.version, profileId: activeProfileId,
+        gameMode:S.gameMode, persona:selectedPersona
     }).then(async ()=>{await applyRunToProfile(); await refreshProfilesUI(); await refreshRunStats();}).catch(()=>{});
 }
 
 /* ===== UI ===== */
-const $menu=document.getElementById('menu-screen'),$pause=document.getElementById('pause-screen'),$go=document.getElementById('gameover-screen'),$hud=document.getElementById('hud'),$settings=document.getElementById('settings-screen');
+const $menu=document.getElementById('menu-screen'),$pause=document.getElementById('pause-screen'),$go=document.getElementById('gameover-screen'),$hud=document.getElementById('hud'),$settings=document.getElementById('settings-screen'),$help=document.getElementById('help-screen');
 const $hPilot=document.getElementById('h-pilot'),$hScore=document.getElementById('h-score'),$hDist=document.getElementById('h-dist'),$hKills=document.getElementById('h-kills'),$hRings=document.getElementById('h-rings');
 const $hFuel=document.getElementById('h-fuel'),$hWind=document.getElementById('h-wind'),$hTime=document.getElementById('h-time');
 const $hBatt=document.getElementById('h-batt'),$hSignal=document.getElementById('h-signal'),$hAir=document.getElementById('h-air'),$flightWarn=document.getElementById('flight-warn');
@@ -2563,7 +2581,7 @@ const altCvs=document.getElementById('alt-canvas'),altCtx=altCvs?altCvs.getConte
 const adiCvs=document.getElementById('adi-canvas'),adiCtx=adiCvs?adiCvs.getContext('2d'):null;
 const spdReadout=document.getElementById('speed-readout');
 const altReadout=document.getElementById('alt-readout');
-const ssLat=document.getElementById('ss-lat'),ssLon=document.getElementById('ss-lon'),ssFps=document.getElementById('ss-fps'),ssLink=document.getElementById('ss-link'),ssGps=document.getElementById('ss-gps');
+const ssLat=document.getElementById('ss-lat'),ssLon=document.getElementById('ss-lon'),ssFps=document.getElementById('ss-fps'),ssLink=document.getElementById('ss-link'),ssGps=document.getElementById('ss-gps'),ssMode=document.getElementById('ss-mode');
 let _fpsFrames=0,_fpsTime=0,_fpsVal=60;
 
 function drawHeadingTape(hdg){
@@ -2670,6 +2688,39 @@ function drawADI(pitch,roll){
 }
 const $dbStats=document.getElementById('db-stats');
 const $profileMenu=document.getElementById('profile-menu'),$profileName=document.getElementById('profile-name'),$profileStats=document.getElementById('profile-stats');
+const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$modeBrief=document.getElementById('mode-brief');
+const $modeCards=[...document.querySelectorAll('[data-mode]')];
+
+function getModeCfg(){ return GAME_MODES[S.gameMode] || GAME_MODES.single; }
+function getPersonaCfg(){ return PERSONAS[selectedPersona] || PERSONAS.recon; }
+function addScore(base){
+    const mode = getModeCfg();
+    const persona = getPersonaCfg();
+    if(base<=0 || mode.scoreMul<=0) return 0;
+    const pts = Math.max(0, Math.round(base * mode.scoreMul * persona.scoreMul));
+    S.score += pts;
+    return pts;
+}
+function setGameMode(mode, persist=true){
+    S.gameMode = GAME_MODES[mode] ? mode : 'single';
+    const cfg = getModeCfg();
+    if($modeBrief) $modeBrief.textContent = cfg.brief;
+    $modeCards.forEach(card=>{
+        const active = card.dataset.mode === S.gameMode;
+        card.classList.toggle('active', active);
+        card.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if(ssMode) ssMode.textContent = cfg.label.toUpperCase();
+    if(persist) dbSetSetting('gameMode', S.gameMode).catch(()=>{});
+}
+function setPersona(persona, persist=true){
+    selectedPersona = PERSONAS[persona] ? persona : 'recon';
+    if($personaMenu) $personaMenu.value = selectedPersona;
+    const cfg = getPersonaCfg();
+    if($personaBrief) $personaBrief.textContent = cfg.brief;
+    if(activeProfile) activeProfile.persona = selectedPersona;
+    if(persist) dbSetSetting('persona', selectedPersona).catch(()=>{});
+}
 
 const $setDeadzone=document.getElementById('set-deadzone'),$setExpo=document.getElementById('set-expo');
 const $setPitchS=document.getElementById('set-pitch-s'),$setRollS=document.getElementById('set-roll-s'),$setYawS=document.getElementById('set-yaw-s'),$setThrS=document.getElementById('set-thr-s');
@@ -2678,13 +2729,14 @@ const $setDeadzoneV=document.getElementById('set-deadzone-v'),$setExpoV=document
 const $setPitchSV=document.getElementById('set-pitch-s-v'),$setRollSV=document.getElementById('set-roll-s-v'),$setYawSV=document.getElementById('set-yaw-s-v'),$setThrSV=document.getElementById('set-thr-s-v');
 const $invLX=document.getElementById('inv-lx'),$invLY=document.getElementById('inv-ly'),$invRX=document.getElementById('inv-rx'),$invRY=document.getElementById('inv-ry');
 const $calibInfo=document.getElementById('calib-info');
+let helpReturnMode = 'menu';
 const $gpLiveStatus=document.getElementById('gp-live-status');
 const $gpAxisFill=[0,1,2,3,4,5].map(i=>document.getElementById(`gp-ax-${i}`));
 const $gpAxisVal=[0,1,2,3,4,5].map(i=>document.getElementById(`gp-axv-${i}`));
 const $gpBtnChips=[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>document.getElementById(`gp-btn-${i}`));
 
 function showScreen(name){
-    $menu.classList.add('hidden');$pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');
+    $menu.classList.add('hidden');$pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');$help.classList.add('hidden');
     if(name==='menu'){$menu.classList.remove('hidden'); startUiAmbience();}
     else if(name==='pause'){
         $pause.classList.remove('hidden'); startUiAmbience();
@@ -2696,7 +2748,22 @@ function showScreen(name){
     }
     else if(name==='gameover'){$go.classList.remove('hidden');document.getElementById('go-score').textContent=S.score;document.getElementById('go-dist').textContent=Math.round(S.dist);document.getElementById('go-kills').textContent=S.kills;document.getElementById('go-rings').textContent=S.rings;}
     else if(name==='settings'){$settings.classList.remove('hidden'); startUiAmbience();}
+    else if(name==='help'){$help.classList.remove('hidden'); startUiAmbience();}
     else if(name==='playing'){$hud.classList.remove('hidden'); stopUiAmbience();}
+}
+function openHelp(){
+    helpReturnMode = S.mode;
+    if(S.mode==='playing') S.mode='paused';
+    showScreen('help');
+}
+function closeHelp(){
+    if(helpReturnMode==='playing' || helpReturnMode==='paused'){
+        S.mode='paused';
+        showScreen('pause');
+    }else{
+        S.mode='menu';
+        showScreen('menu');
+    }
 }
 function getVehicleProfile(){
     return VEHICLE_PROFILES[controlCfg.vehicleMode] || VEHICLE_PROFILES.drone;
@@ -2754,9 +2821,9 @@ async function refreshRunStats(){
     const pTitle = activeProfile?.name || 'Operator';
     $dbStats.innerHTML=
         `<b>${pTitle} Mission Log</b><br>` +
-        (topProfile.length ? topProfile.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts • ${Math.round(r.dist)}m`).join('<br>') : 'No sorties logged') +
+        (topProfile.length ? topProfile.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts | ${Math.round(r.dist)}m | ${(r.gameMode||'single').toUpperCase()}`).join('<br>') : 'No sorties logged') +
         `<br><b style="display:block;margin-top:6px">All Operators</b>` +
-        topGlobal.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts • ${Math.round(r.dist)}m`).join('<br>');
+        topGlobal.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts | ${Math.round(r.dist)}m | ${(r.gameMode||'single').toUpperCase()}`).join('<br>');
 }
 function fmtSec(sec){
     const s=Math.max(0,Math.floor(sec));
@@ -2770,7 +2837,21 @@ async function refreshProfilesUI(){
     activeProfileId = (savedId && profiles.some(p=>p.id===savedId)) ? savedId : profiles[0].id;
     $profileMenu.value = activeProfileId;
     activeProfile = profiles.find(p=>p.id===activeProfileId) || profiles[0];
-    $profileStats.innerHTML = `<b>${activeProfile.name}</b><br>Sorties: ${activeProfile.totalFlights||0} • Best: ${Math.round(activeProfile.bestScore||0)} pts<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m • Time: ${fmtSec(activeProfile.totalTime||0)}`;
+    const savedPersona = await dbGetSetting('persona');
+    const savedMode = await dbGetSetting('gameMode');
+    const hasProfilePersona = !!activeProfile.persona;
+    const hasProfileMode = !!activeProfile.preferredMode;
+    selectedPersona = activeProfile.persona || savedPersona || selectedPersona || 'recon';
+    setPersona(selectedPersona, false);
+    if(activeProfile.preferredMode || savedMode) setGameMode(activeProfile.preferredMode || savedMode, false);
+    if(!hasProfilePersona || !hasProfileMode){
+        activeProfile.persona = selectedPersona;
+        activeProfile.preferredMode = S.gameMode;
+        await dbSaveProfile(activeProfile);
+    }
+    const persona = getPersonaCfg();
+    const mode = getModeCfg();
+    $profileStats.innerHTML = `<b>${activeProfile.name}</b> | ${persona.rank} ${persona.badge}<br>Mode: ${mode.label} | Sorties: ${activeProfile.totalFlights||0} | Best: ${Math.round(activeProfile.bestScore||0)} pts<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m | Time: ${fmtSec(activeProfile.totalTime||0)}`;
 }
 async function createProfileFromInput(){
     const name = ($profileName.value||'').trim();
@@ -2778,7 +2859,8 @@ async function createProfileFromInput(){
     const id = `pilot_${Date.now().toString(36)}`;
     await dbSaveProfile({
         id, name, createdAt:Date.now(), lastPlayed:Date.now(),
-        totalFlights:0,totalScore:0,bestScore:0,totalDistance:0,totalKills:0,totalRings:0,totalTime:0
+        totalFlights:0,totalScore:0,bestScore:0,totalDistance:0,totalKills:0,totalRings:0,totalTime:0,
+        persona:selectedPersona, preferredMode:S.gameMode
     });
     activeProfileId = id;
     await dbSetSetting('activeProfileId', activeProfileId);
@@ -2804,30 +2886,37 @@ async function applyRunToProfile(){
     p.totalKills = (p.totalKills||0)+S.kills;
     p.totalRings = (p.totalRings||0)+S.rings;
     p.totalTime = (p.totalTime||0)+WORLD.missionSec;
+    p.persona = selectedPersona;
+    p.preferredMode = S.gameMode;
     await dbSaveProfile(p);
 }
 function startGame(){
     if(!$profileMenu.value && activeProfileId) $profileMenu.value = activeProfileId;
     activeProfileId = $profileMenu.value || activeProfileId;
-    activeProfile = { id: activeProfileId, name: $profileMenu.selectedOptions[0]?.textContent || activeProfile.name };
+    activeProfile = { id: activeProfileId, name: $profileMenu.selectedOptions[0]?.textContent || activeProfile.name, persona:selectedPersona, preferredMode:S.gameMode };
     dbSetSetting('activeProfileId', activeProfileId).catch(()=>{});
+    dbSetSetting('gameMode', S.gameMode).catch(()=>{});
+    dbSetSetting('persona', selectedPersona).catch(()=>{});
+    if(S.gameMode==='multiplayer') notify('ONLINE LAB NEEDS REALTIME BACKEND','kill-note');
     resumeAudio();startEngine();resetState();drone.position.copy(SPAWN);prevPos.copy(drone.position);drone.rotation.set(0,0,0);droneVis.rotation.set(0,0,0);heliVis.rotation.set(0,0,0);
+    WORLD.fuel = getModeCfg().fuelStart;
     applyVehicleMode();
     lockTarget=null; lockFollow=false;
-    enemies.forEach(e=>scene.remove(e));enemies.length=0;spawnEnemies();
+    enemies.forEach(e=>scene.remove(e));enemies.length=0;if(getModeCfg().enemies)spawnEnemies();
     rings.forEach(r=>{r.userData.got=false;r.visible=true;});
     orbs.forEach(o=>{o.userData.got=false;o.visible=true;});
     for(const b of bulletPool){b.userData.active=false;b.visible=false;b.position.set(0,-999,0);}bulletActive=0;
     for(const b of eBulletPool){b.userData.active=false;b.visible=false;b.position.set(0,-999,0);}eBulletActive=0;
     for(const p of expPool){p.userData.active=false;p.visible=false;p.position.set(0,-999,0);}
     for(const l of expLightPool){l.userData.active=false;l.visible=false;l.intensity=0;}explosions.length=0;
-    comboCount=0;comboTimer=0;objIdx=0;objTimer=0;objShown=false;activePU=null;puTimer=0;
+    comboCount=0;comboTimer=0;objIdx=0;objTimer=0;objShown=!getModeCfg().objective;activePU=null;puTimer=0;
     powerUps.forEach(pu=>{pu.userData.got=false;pu.visible=true;});
     $objective.classList.remove('show');
     S.mode='playing';showScreen('playing');clock.getDelta();
     document.getElementById('game-meta').style.display='none';
     periodicTimer=20+Math.random()*15;
     setTimeout(()=>radioSpeak('startup'),1500);
+    notify(`${getModeCfg().label.toUpperCase()} MODE | ${getPersonaCfg().label.toUpperCase()}`,'ring-note');
 }
 function togglePause(){
     if(S.mode==='playing'){S.mode='paused';showScreen('pause');}
@@ -2840,6 +2929,8 @@ function exitToMenu(){
 }
 document.getElementById('btn-settings').addEventListener('click',()=>{applySettingsToUI();showScreen('settings');});
 document.getElementById('btn-back-menu').addEventListener('click',()=>showScreen('menu'));
+document.getElementById('btn-help').addEventListener('click',openHelp);
+document.getElementById('btn-help-back').addEventListener('click',closeHelp);
 function setVehicleMode(mode){
     controlCfg.vehicleMode = mode === 'helicopter' ? 'helicopter' : 'drone';
     $vehicleMenu.value = controlCfg.vehicleMode;
@@ -2848,6 +2939,17 @@ function setVehicleMode(mode){
 }
 $vehicleMenu.addEventListener('change', async ()=>{setVehicleMode($vehicleMenu.value); await saveControlSettings();});
 $vehicleSet.addEventListener('change', pullSettingsFromUI);
+$modeCards.forEach(card=>card.addEventListener('click', async ()=>{
+    setGameMode(card.dataset.mode);
+    const p = await dbGetProfileById(activeProfileId);
+    if(p){p.preferredMode=S.gameMode; await dbSaveProfile(p); activeProfile=p; await refreshProfilesUI();}
+    if(S.gameMode==='multiplayer') notify('ONLINE LAB: BACKEND NOT CONNECTED','kill-note');
+}));
+$personaMenu.addEventListener('change', async ()=>{
+    setPersona($personaMenu.value);
+    const p = await dbGetProfileById(activeProfileId);
+    if(p){p.persona=selectedPersona; await dbSaveProfile(p); activeProfile=p; await refreshProfilesUI();}
+});
 document.getElementById('btn-calibrate').addEventListener('click', async ()=>{
     const ok = calibrateGamepadCenter();
     if(ok){applySettingsToUI();await saveControlSettings();notify('GAMEPAD CALIBRATED','ring-note');}
@@ -2889,9 +2991,10 @@ applyVehicleMode();
 const objectives=['Neutralize 5 hostile drones','Secure 8 waypoints','Hold station for 60 seconds','Maintain air superiority'];
 let objIdx=0, objTimer=0, objShown=false;
 function checkObjective(dt=1/60){
-    if(objIdx===0&&S.kills>=5){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent=objectives[objIdx];$objective.classList.add('show');},500);notify('OBJECTIVE COMPLETE','ring-note');S.score+=500;}
-    else if(objIdx===1&&S.rings>=8){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent=objectives[objIdx];$objective.classList.add('show');},500);notify('OBJECTIVE COMPLETE','ring-note');S.score+=500;}
-    else if(objIdx===2){objTimer+=dt;if(objTimer>=60){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent='AO Secured - Free Hunt';$objective.classList.add('show');},500);notify('ALL OBJECTIVES COMPLETE +1000','ring-note');S.score+=1000;setTimeout(()=>radioSpeak('objective'),800);}}
+    if(!getModeCfg().objective) return;
+    if(objIdx===0&&S.kills>=5){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent=objectives[objIdx];$objective.classList.add('show');},500);notify('OBJECTIVE COMPLETE','ring-note');addScore(500);}
+    else if(objIdx===1&&S.rings>=8){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent=objectives[objIdx];$objective.classList.add('show');},500);notify('OBJECTIVE COMPLETE','ring-note');addScore(500);}
+    else if(objIdx===2){objTimer+=dt;if(objTimer>=60){objIdx++;$objective.classList.remove('show');setTimeout(()=>{$objective.textContent='AO Secured - Free Hunt';$objective.classList.add('show');},500);notify('ALL OBJECTIVES COMPLETE +1000','ring-note');addScore(1000);setTimeout(()=>radioSpeak('objective'),800);}}
     if(!objShown){$objective.textContent=objectives[0];$objective.classList.add('show');objShown=true;}
 }
 
@@ -2956,6 +3059,7 @@ function updHUD(spd,dt=1/60){
         ssGps.classList.toggle('bad-sys', WORLD.gps==='NO FIX');
         ssGps.classList.toggle('warn-sys', WORLD.gps==='2D');
     }
+    if(ssMode) ssMode.textContent = getModeCfg().label.toUpperCase();
     if($flightWarn){
         $flightWarn.textContent = WORLD.warning;
         $flightWarn.classList.toggle('show', !!WORLD.warning);
@@ -3292,11 +3396,11 @@ function animate(){
     throttle = THREE.MathUtils.lerp(throttle, Math.min(1.0, targetThrottle), 1-Math.exp(-8*dt));
     const distFromBase = Math.hypot(drone.position.x, drone.position.z);
     const lowAltLoss = drone.position.y < 12 ? (12-drone.position.y)*0.7 : 0;
-    WORLD.signal = THREE.MathUtils.clamp(100 - distFromBase*0.13 - lowAltLoss - WORLD.turbulence*5, 0, 100);
+    WORLD.signal = THREE.MathUtils.clamp(100 + getPersonaCfg().signalBonus - distFromBase*0.13 - lowAltLoss - WORLD.turbulence*5, 0, 100);
     WORLD.gps = WORLD.signal<18 ? 'NO FIX' : (WORLD.signal<45 ? '2D' : '3D');
     WORLD.batteryV = THREE.MathUtils.clamp(18.6 + (WORLD.fuel/100)*6.6 - throttle*0.55 - (S.boosting?0.45:0), 18.0, 25.2);
     if(!fuelFalling){
-        WORLD.fuel = Math.max(0, WORLD.fuel - dt*(0.18 + throttle*0.95 + (S.boosting?1.2:0) + (controlCfg.vehicleMode==='helicopter'?0.22:0)));
+        WORLD.fuel = Math.max(0, WORLD.fuel - dt*(0.18 + throttle*0.95 + (S.boosting?1.2:0) + (controlCfg.vehicleMode==='helicopter'?0.22:0))*getPersonaCfg().fuelMul);
     }
     /* Fuel warning system */
     if(WORLD.fuel<25 && WORLD.fuel>0){
@@ -3463,7 +3567,7 @@ function animate(){
     tailLight.visible=tailBlink;
 
     S.dist+=prevPos.distanceTo(drone.position);
-    S.score+=Math.round(prevPos.distanceTo(drone.position)*.4);
+    addScore(Math.round(prevPos.distanceTo(drone.position)*.4));
     prevPos.copy(drone.position);
 
     /* Chase camera (toggleable distance) */
