@@ -30,11 +30,13 @@ This project is playable today, but it is still a simulator-game prototype. The 
 
 GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime presence**. It gives Online Lab shared rooms and synced ghost/co-op drones without paying for a server.
 
-1. Create a free project at https://supabase.com/.
-2. In Supabase, open **Project Settings -> API**.
-3. Copy the project URL and `anon public` key.
-4. Open the simulator, choose **Online Lab**, and paste the URL/key into **Free Online Setup**.
-5. Pick a room code such as `alpha-room`, save, then launch Online Lab on two browsers/devices with the same room code.
+The app is already configured with the project's public Supabase key.
+
+1. Open the simulator and choose **Online Lab**.
+2. Click **Create Room** to generate a code such as `DRN-482K`.
+3. Click **Copy Link** and share it with another player.
+4. The other player opens the invite URL, selects **Online Lab**, and clicks **Join Room**.
+5. Both players launch the mission and see synced remote ghost drones.
 
 Current Online Lab syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote ghost drones. Combat synchronization and authoritative validation should come later.
 

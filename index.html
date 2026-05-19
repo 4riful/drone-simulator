@@ -38,11 +38,14 @@
         </div>
         <div id="mode-brief" class="mode-brief">Single pilot combat sortie. Existing systems stay enabled.</div>
         <div id="online-setup" class="online-setup">
-            <div class="m-label">Free Online Setup</div>
-            <div class="m-row"><label>Room</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="public-room"></div>
-            <div class="m-row"><label>URL</label><input id="online-url" class="m-input" type="url" placeholder="https://your-project.supabase.co"></div>
-            <div class="m-row"><label>Anon Key</label><input id="online-key" class="m-input" type="password" placeholder="Supabase anon public key"></div>
-            <div class="online-actions"><button class="btn btn-sm" id="btn-online-save" type="button">Save Online</button><span id="online-status">Offline. Supabase free config required.</span></div>
+            <div class="m-label">Online Multiplayer</div>
+            <div class="m-row"><label>Room</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="DRN-482K"></div>
+            <div class="online-actions">
+                <button class="btn btn-sm" id="btn-room-create" type="button">Create Room</button>
+                <button class="btn btn-sm" id="btn-room-join" type="button">Join Room</button>
+                <button class="btn btn-sm" id="btn-room-copy" type="button">Copy Link</button>
+            </div>
+            <div class="online-actions"><span id="online-status">Ready. Create or join a room.</span></div>
         </div>
     </div>
 

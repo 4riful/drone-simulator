@@ -57,9 +57,13 @@ const GAME_MODES = {
     training: { label:'Training', brief:'Flight school mode: no hostile drones, slower scoring, safer fuel reserve.', enemies:false, scoreMul:0.35, fuelStart:100, objective:false },
     mission: { label:'Mission', brief:'Full mission profile: hostile drones, objectives, and higher score weight.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
     freeflight: { label:'Free Flight', brief:'Open practice mode: explore, land, and tune controls without combat.', enemies:false, scoreMul:0, fuelStart:100, objective:false },
-    multiplayer: { label:'Online Lab', brief:'Free Supabase Realtime presence rooms. Add URL + anon key, share room code, and fly together as synced ghost drones.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
+    multiplayer: { label:'Online Lab', brief:'Create a room code, share the invite link, and fly together as synced ghost drones.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
 };
-const ONLINE_DEFAULTS = { room:'public-room', url:'', key:'' };
+const ONLINE_DEFAULTS = {
+    room:'',
+    url:'https://edmvtxoteltikuwjxdsf.supabase.co',
+    key:'sb_publishable_5OhCh1NLtCqrYjC6Y2AlOA_9zSA2K_8'
+};
 const PERSONAS = {
     recon: { label:'Recon Specialist', rank:'ISR-2', badge:'RECON', brief:'Stable sensor-first pilot. Better signal discipline, lighter combat bonus.', signalBonus:8, scoreMul:0.95, fuelMul:0.96 },
     combat: { label:'Combat Pilot', rank:'CMB-3', badge:'STRIKE', brief:'Aggressive weapons pilot. Higher kill score, heavier fuel burn.', signalBonus:0, scoreMul:1.12, fuelMul:1.08 },
@@ -608,7 +612,19 @@ sessionStorage.setItem('drone.onlineClientId', onlineClientId);
 const remotePilots = new Map();
 const remoteDroneMat = new THREE.MeshBasicMaterial({ color:0x49d8ff, wireframe:true, transparent:true, opacity:0.68 });
 function normalizeRoomId(room){
-    return String(room||ONLINE_DEFAULTS.room).toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || ONLINE_DEFAULTS.room;
+    return String(room||'').toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24);
+}
+function makeRoomCode(){
+    return `DRN-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+}
+function getRoomFromUrl(){
+    return normalizeRoomId(new URLSearchParams(location.search).get('room'));
+}
+function roomInviteUrl(){
+    const room = normalizeRoomId(onlineConfig.room);
+    const url = new URL(location.href);
+    url.searchParams.set('room', room || makeRoomCode());
+    return url.toString();
 }
 function setOnlineStatus(text, kind='warn'){
     const el=document.getElementById('online-status');
@@ -618,27 +634,51 @@ function setOnlineStatus(text, kind='warn'){
 async function loadOnlineConfig(){
     const saved = await dbGetSetting('onlineConfig');
     onlineConfig = {...ONLINE_DEFAULTS, ...(saved||{})};
-    onlineConfig.room = normalizeRoomId(onlineConfig.room);
-    const roomEl=document.getElementById('online-room'),urlEl=document.getElementById('online-url'),keyEl=document.getElementById('online-key');
+    onlineConfig.url = ONLINE_DEFAULTS.url;
+    onlineConfig.key = ONLINE_DEFAULTS.key;
+    onlineConfig.room = getRoomFromUrl() || normalizeRoomId(onlineConfig.room) || makeRoomCode();
+    const roomEl=document.getElementById('online-room');
     if(roomEl) roomEl.value=onlineConfig.room;
-    if(urlEl) urlEl.value=onlineConfig.url;
-    if(keyEl) keyEl.value=onlineConfig.key;
-    setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Supabase free config required.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+    setOnlineStatus(`Ready. Room ${onlineConfig.room}`, 'good');
 }
-async function saveOnlineConfig(){
-    const roomEl=document.getElementById('online-room'),urlEl=document.getElementById('online-url'),keyEl=document.getElementById('online-key');
+async function saveOnlineRoom(room=null){
+    const roomEl=document.getElementById('online-room');
     onlineConfig = {
-        room: normalizeRoomId(roomEl?.value || onlineConfig.room),
-        url: (urlEl?.value || '').trim().replace(/\/$/,''),
-        key: (keyEl?.value || '').trim()
+        ...onlineConfig,
+        room: normalizeRoomId(room || roomEl?.value || onlineConfig.room || makeRoomCode()),
+        url: ONLINE_DEFAULTS.url,
+        key: ONLINE_DEFAULTS.key
     };
     if(roomEl) roomEl.value=onlineConfig.room;
     await dbSetSetting('onlineConfig', onlineConfig);
-    setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Saved. Launch Online Lab to connect.':'Saved, but URL/key still missing.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+    setOnlineStatus(`Ready. Room ${onlineConfig.room}`, 'good');
+    return onlineConfig.room;
+}
+async function createOnlineRoom(){
+    const room = await saveOnlineRoom(makeRoomCode());
+    setGameMode('multiplayer');
+    notify(`ROOM ${room} CREATED`,'ring-note');
+}
+async function joinOnlineRoom(){
+    const room = await saveOnlineRoom();
+    setGameMode('multiplayer');
+    notify(`JOIN ROOM ${room}`,'ring-note');
+}
+async function copyOnlineInvite(){
+    const room = await saveOnlineRoom();
+    const url = roomInviteUrl();
+    try{
+        await navigator.clipboard.writeText(url);
+        setOnlineStatus(`Invite copied for ${room}`, 'good');
+        notify('INVITE LINK COPIED','ring-note');
+    }catch(_){
+        setOnlineStatus(url, 'good');
+        notify('COPY LINK FROM ROOM STATUS','ring-note');
+    }
 }
 function getOnlineStateLabel(){
     if(onlineConnected) return `Online ${remotePilots.size+1} pilot(s)`;
-    return onlineConfig.url&&onlineConfig.key ? 'Ready. Launch Online Lab to connect.' : 'Offline. Supabase free config required.';
+    return onlineConfig.room ? `Ready. Room ${onlineConfig.room}` : 'Ready. Create or join a room.';
 }
 function makeRemoteDrone(){
     const g = new THREE.Group();
@@ -679,7 +719,9 @@ function updateRemotePilots(dt){
 }
 async function connectOnlineRoom(){
     if(S.gameMode!=='multiplayer') return;
-    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus('Offline. Add free Supabase URL/key.', 'bad');notify('ADD SUPABASE FREE CONFIG','kill-note');return;}
+    await saveOnlineRoom();
+    if(!onlineConfig.room){setOnlineStatus('Create or enter a room code first.', 'bad');notify('CREATE OR JOIN ROOM','kill-note');return;}
+    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus('Online backend is not configured.', 'bad');notify('ONLINE CONFIG MISSING','kill-note');return;}
     try{
         if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
         const { createClient } = await supabaseModulePromise;
@@ -712,7 +754,7 @@ async function connectOnlineRoom(){
 }
 async function disconnectOnlineRoom(){
     if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
-    onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Supabase free config required.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+    onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
 }
 function onlinePayload(){
     return { id:onlineClientId, profileId:activeProfileId, name:activeProfile?.name||'Pilot', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
@@ -3079,7 +3121,7 @@ $modeCards.forEach(card=>card.addEventListener('click', async ()=>{
     setGameMode(card.dataset.mode);
     const p = await dbGetProfileById(activeProfileId);
     if(p){p.preferredMode=S.gameMode; await dbSaveProfile(p); activeProfile=p; await refreshProfilesUI();}
-    if(S.gameMode==='multiplayer') setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Add free Supabase URL/key.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+    if(S.gameMode==='multiplayer') setOnlineStatus(getOnlineStateLabel(), 'good');
 }));
 $personaMenu.addEventListener('change', async ()=>{
     setPersona($personaMenu.value);
@@ -3091,7 +3133,9 @@ document.getElementById('btn-calibrate').addEventListener('click', async ()=>{
     if(ok){applySettingsToUI();await saveControlSettings();notify('GAMEPAD CALIBRATED','ring-note');}
     else notify('CONNECT GAMEPAD FIRST','kill-note');
 });
-document.getElementById('btn-online-save').addEventListener('click',()=>{saveOnlineConfig().catch(()=>setOnlineStatus('Could not save online config.', 'bad'));});
+document.getElementById('btn-room-create').addEventListener('click',()=>{createOnlineRoom().catch(()=>setOnlineStatus('Could not create room.', 'bad'));});
+document.getElementById('btn-room-join').addEventListener('click',()=>{joinOnlineRoom().catch(()=>setOnlineStatus('Could not join room.', 'bad'));});
+document.getElementById('btn-room-copy').addEventListener('click',()=>{copyOnlineInvite().catch(()=>setOnlineStatus('Could not copy invite.', 'bad'));});
 document.getElementById('btn-save-settings').addEventListener('click', async ()=>{pullSettingsFromUI();await saveControlSettings();notify('SETTINGS SAVED','ring-note');});
 [$setDeadzone,$setExpo,$setPitchS,$setRollS,$setYawS,$setThrS,$invLX,$invLY,$invRX,$invRY].forEach(el=>el.addEventListener('input',pullSettingsFromUI));
 document.getElementById('btn-start').addEventListener('click',startGame);
