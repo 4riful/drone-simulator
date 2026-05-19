@@ -23,12 +23,12 @@ const ONLINE_CONFIG = {
 };
 
 const TERMINAL_LINES = [
-  '> battle room link: standby',
-  '> player one creates room code',
-  '> player two joins same code',
-  '> supabase presence: duel sync ready',
-  '> radar contacts: remote pilot enabled',
-  '> webgl cockpit: launch isolated'
+  '> tactical launcher armed',
+  '> mission cards synced to cockpit rail',
+  '> flight profile loaded and standing by',
+  '> radar contacts: remote pilot channel ready',
+  '> airframe selection locked for launch',
+  '> webgl combat deck: green to go'
 ];
 
 let selectedMode = 'single';
@@ -37,11 +37,13 @@ let supabaseModulePromise = null;
 let lastRoomCheck = { room: '', activePilots: 0, ok: false };
 
 const $brief = document.getElementById('brief');
+const $aircraftBrief = document.getElementById('aircraft-brief');
 const $launchNote = document.getElementById('launch-note');
 const $roomPanel = document.getElementById('room-panel');
 const $roomCode = document.getElementById('room-code');
 const $roomStatus = document.getElementById('room-status');
 const $terminalFeed = document.getElementById('terminal-feed');
+const $aircraftMenu = document.getElementById('aircraft-menu');
 
 function normalizeRoom(room) {
   return String(room || '').toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
@@ -65,7 +67,8 @@ function gameUrl() {
 function updateSummary() {
   $brief.textContent = MODES[selectedMode];
   $launchNote.textContent = `${selectedMode.replace(/flight$/, ' flight').toUpperCase()} | ${AIRCRAFT_LABELS[selectedAircraft]}`;
-  $roomPanel.classList.toggle('hidden', selectedMode !== 'multiplayer');
+  $aircraftBrief.textContent = AIRCRAFT[selectedAircraft];
+  $roomPanel.classList.toggle('show', selectedMode === 'multiplayer');
 }
 
 function pushTerminal(line) {
@@ -93,11 +96,8 @@ document.getElementById('mode-grid').addEventListener('click', (event) => {
   updateSummary();
 });
 
-document.getElementById('aircraft-grid').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-aircraft]');
-  if (!button) return;
-  selectedAircraft = button.dataset.aircraft;
-  setActive('[data-aircraft]', 'aircraft', selectedAircraft);
+$aircraftMenu.addEventListener('change', () => {
+  selectedAircraft = $aircraftMenu.value;
   updateSummary();
 });
 
@@ -191,7 +191,7 @@ if (bootParams.get('mode') && MODES[bootParams.get('mode')]) {
 }
 if (bootParams.get('aircraft') && AIRCRAFT[bootParams.get('aircraft')]) {
   selectedAircraft = bootParams.get('aircraft');
-  setActive('[data-aircraft]', 'aircraft', selectedAircraft);
+  $aircraftMenu.value = selectedAircraft;
 }
 if (bootParams.get('room')) $roomCode.value = normalizeRoom(bootParams.get('room'));
 
