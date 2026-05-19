@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PREDATOR OPS: Iran Theater</title>
     <link rel="stylesheet" href="./src/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -15,6 +15,14 @@
         <div class="m-tag">CENTCOM Drone Operations</div>
         <h1>Predator Ops</h1>
         <h2>Iran Theater</h2>
+        <div class="terminal-hero" aria-label="terminal mission brief">
+            <div class="terminal-bar"><span></span><span></span><span></span><b>ops@predator:~/mission</b></div>
+            <div class="terminal-lines">
+                <p><span>$</span> boot predator-ops --theater=iran</p>
+                <p><span>&gt;</span> telemetry: fuel | link | gps | wind | hull</p>
+                <p><span>&gt;</span> status: simulator online, launch authorized</p>
+            </div>
+        </div>
     </div>
 
     <button class="m-start" id="btn-start">Launch Mission</button>
@@ -61,6 +69,24 @@
         <summary>Mission Records</summary>
         <div class="m-body">
             <div id="db-stats">Loading mission records...</div>
+        </div>
+    </details>
+
+    <details class="m-section credits-section">
+        <summary>Author &amp; Resources</summary>
+        <div class="m-body credits-grid">
+            <div class="credit-card">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
+                <div><b>Author</b><span>Ariful Anik / 4riful</span></div>
+            </div>
+            <div class="credit-card">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></svg>
+                <div><b>Font</b><span>JetBrains Mono, OFL-1.1</span></div>
+            </div>
+            <div class="credit-card">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9z"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
+                <div><b>Graphics</b><span>Tabler Icons style, MIT; procedural Three.js scene</span></div>
+            </div>
         </div>
     </details>
 
@@ -203,6 +229,7 @@
 <div id="fuel-countdown"></div>
 <div id="fuel-warn-text"></div>
 <div id="game-meta"></div>
+<div id="resource-credit">UI: JetBrains Mono + Tabler Icons style | Author: Ariful Anik</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

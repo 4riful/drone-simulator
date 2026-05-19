@@ -63,6 +63,15 @@ npm run preview
 - `package.json`: local dev, preview, and check scripts.
 - `check-module.mjs`: runs `node --check` against the simulator module.
 - `ROADMAP.md`: technical direction for turning the prototype into a maintainable simulator project.
+- `ATTRIBUTIONS.md`: author and open-resource credits.
+
+## Theme And Resources
+
+- Clean terminal-command-center UI theme.
+- JetBrains Mono font, licensed under OFL-1.1.
+- Tabler Icons visual language, licensed under MIT.
+- Three.js powers the procedural 3D graphics.
+- Author: Ariful Anik / `4riful`.
 
 ## Notes
 

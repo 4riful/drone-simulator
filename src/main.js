@@ -45,9 +45,9 @@ let fuelCountdown = -1;
 let fuelFalling = false;
 let lastImpactAt = 0;
 const GAME_META = {
-    version: 'v3.0.0',
-    coder: 'ANIK',
-    note: 'CENTCOM Theater Operations — Coded in Xettas Lab'
+    version: 'v3.1.0',
+    coder: 'Ariful Anik / 4riful',
+    note: 'Terminal simulator theme'
 };
 const CONTROL_DEFAULT = {
     deadzone: 0.08,
@@ -201,7 +201,7 @@ let tiltPitch = 0;   /* forward/back tilt (rad) -- positive = nose down = forwar
 let tiltRoll  = 0;   /* left/right tilt (rad)  -- positive = right side down = strafe right */
 let throttle  = 0.46; /* current throttle (0-1), starts at hover */
 document.getElementById('game-meta').textContent =
-    `${GAME_META.version} • Op: ${GAME_META.coder} • ${GAME_META.note}`;
+    `${GAME_META.version} | Author: ${GAME_META.coder} | ${GAME_META.note}`;
 /* Smoothed input values (motor lag simulation) */
 let sInput = { fwd:0, side:0, yaw:0, vert:0, pitch:0 };
 function resetState() {
@@ -2708,7 +2708,7 @@ function applyVehicleMode(){
     heliVis.visible = mode === 'helicopter';
     const vp = getVehicleProfile();
     document.getElementById('game-meta').textContent =
-        `${GAME_META.version} • ${controlCfg.vehicleMode==='helicopter'?'MQ-8B Fire Scout':'MQ-9 Reaper'} • Op: ${GAME_META.coder} • ${GAME_META.note}`;
+        `${GAME_META.version} | ${controlCfg.vehicleMode==='helicopter'?'MQ-8B Fire Scout':'MQ-9 Reaper'} | Author: ${GAME_META.coder} | ${GAME_META.note}`;
 }
 function applySettingsToUI(){
     $setDeadzone.value=controlCfg.deadzone; $setExpo.value=controlCfg.expo;
