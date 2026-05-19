@@ -3078,6 +3078,7 @@ async function applyRunToProfile(){
     await dbSaveProfile(p);
 }
 function startGame(){
+    document.body.classList.remove('direct-launch');
     if(!$profileMenu.value && activeProfileId) $profileMenu.value = activeProfileId;
     activeProfileId = $profileMenu.value || activeProfileId;
     activeProfile = { id: activeProfileId, name: $profileMenu.selectedOptions[0]?.textContent || activeProfile.name, persona:selectedPersona, preferredMode:S.gameMode };

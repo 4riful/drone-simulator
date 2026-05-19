@@ -8,6 +8,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="is-landing">
+<script>
+    if (new URLSearchParams(location.search).has('mode') || new URLSearchParams(location.search).has('aircraft') || new URLSearchParams(location.search).has('room')) {
+        document.body.classList.add('direct-launch');
+    }
+</script>
 
 <div id="menu-screen" class="screen landing-page">
 <div class="m">

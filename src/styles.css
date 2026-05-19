@@ -34,6 +34,24 @@ body.is-landing #game-meta,
 body.is-menu #game-meta {
     display: none;
 }
+body.direct-launch #menu-screen {
+    display: none !important;
+}
+body.direct-launch::after {
+    content: 'Loading simulator...';
+    position: fixed;
+    inset: 0;
+    z-index: 220;
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+    font: 800 clamp(18px, 3vw, 28px)/1 var(--font-terminal);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    background:
+        radial-gradient(circle at 50% 35%, rgba(99,255,156,.13), transparent 34%),
+        linear-gradient(135deg, #020504, #07100c 54%, #020403);
+}
 body::before {
     content: '';
     position: fixed;
