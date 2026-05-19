@@ -49,7 +49,6 @@ let fuelFalling = false;
 let lastImpactAt = 0;
 const GAME_META = {
     version: 'v3.2.0',
-    coder: 'Ariful Anik / 4riful',
     note: 'Free online lab and realism roadmap'
 };
 const GAME_MODES = {
@@ -223,8 +222,7 @@ let yawVel = 0;
 let tiltPitch = 0;   /* forward/back tilt (rad) -- positive = nose down = forward */
 let tiltRoll  = 0;   /* left/right tilt (rad)  -- positive = right side down = strafe right */
 let throttle  = 0.46; /* current throttle (0-1), starts at hover */
-document.getElementById('game-meta').textContent =
-    `${GAME_META.version} | Author: ${GAME_META.coder} | ${GAME_META.note}`;
+document.getElementById('game-meta').textContent = `${GAME_META.version} | ${GAME_META.note}`;
 /* Smoothed input values (motor lag simulation) */
 let sInput = { fwd:0, side:0, yaw:0, vert:0, pitch:0 };
 function resetState() {
@@ -2913,6 +2911,9 @@ const $gpBtnChips=[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>document.getElementById(`gp
 
 function showScreen(name){
     $menu.classList.add('hidden');$pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');$help.classList.add('hidden');
+    document.body.classList.toggle('is-gameplay', name==='playing' || name==='pause' || name==='gameover');
+    document.body.classList.toggle('is-landing', name==='menu' || name==='settings' || name==='help');
+    document.body.classList.toggle('is-menu', name==='menu' || name==='settings' || name==='help');
     if(name==='menu'){$menu.classList.remove('hidden'); startUiAmbience();}
     else if(name==='pause'){
         $pause.classList.remove('hidden'); startUiAmbience();
@@ -2951,7 +2952,7 @@ function applyVehicleMode(){
     heliVis.visible = mode === 'helicopter';
     const vp = getVehicleProfile();
     document.getElementById('game-meta').textContent =
-        `${GAME_META.version} | ${controlCfg.vehicleMode==='helicopter'?'MQ-8B Fire Scout':'MQ-9 Reaper'} | Author: ${GAME_META.coder} | ${GAME_META.note}`;
+        `${GAME_META.version} | ${controlCfg.vehicleMode==='helicopter'?'MQ-8B Fire Scout':'MQ-9 Reaper'} | ${GAME_META.note}`;
 }
 function applySettingsToUI(){
     $setDeadzone.value=controlCfg.deadzone; $setExpo.value=controlCfg.expo;
@@ -3360,12 +3361,9 @@ function animate(){
     validateLockTarget();
 
     if(S.mode!=='playing'&&S.mode!=='paused'){
-        const t=performance.now()*.00012;
-        camera.position.set(80*Math.sin(t),70,80*Math.cos(t));
-        camera.lookAt(0,25,0);
-        updateWater(.016);
-        updParticles(.016);
-        renderer.render(scene,camera); return;
+        renderer.clear();
+        clock.getDelta();
+        return;
     }
     if(S.mode==='paused'){renderer.render(scene,camera);return;}
 

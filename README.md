@@ -4,10 +4,6 @@ Browser-playable drone simulator prototype built with Three.js, a terminal-style
 
 **Play now:** https://4riful.github.io/drone-simulator/
 
-**Repository:** https://github.com/4riful/drone-simulator
-
-**Author:** [Ariful Anik / 4riful](https://github.com/4riful)
-
 ## Status
 
 This project is playable today, but it is still a simulator-game prototype. The UI now separates the product concepts clearly: single-player, training, mission, free-flight, profile personas, and an experimental online lab. The current flight controller is assisted and partly game-like; `docs/FLIGHT_MODEL_PLAN.md` documents the next step toward a force/torque model.

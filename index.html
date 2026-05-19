@@ -3,32 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PREDATOR OPS: Iran Theater</title>
+    <title>Drone Simulator</title>
     <link rel="stylesheet" href="./src/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="is-landing">
 
-<div id="menu-screen" class="screen">
+<div id="menu-screen" class="screen landing-page">
 <div class="m">
     <div class="m-head">
-        <div class="m-tag">CENTCOM Drone Operations</div>
-        <h1>Predator Ops</h1>
-        <h2>Iran Theater</h2>
+        <div class="m-tag">Browser Flight Simulator</div>
+        <h1>Drone Simulator</h1>
+        <h2>Flight Setup</h2>
         <div class="terminal-hero" aria-label="terminal mission brief">
-            <div class="terminal-bar"><span></span><span></span><span></span><b>ops@predator:~/mission</b></div>
+            <div class="terminal-bar"><span></span><span></span><span></span><b>setup@simulator:~/preflight</b></div>
             <div class="terminal-lines">
-                <p><span>$</span> boot predator-ops --theater=iran</p>
-                <p><span>&gt;</span> telemetry: fuel | link | gps | wind | hull</p>
-                <p><span>&gt;</span> status: simulator online, launch authorized</p>
+                <p><span>1</span> choose a game mode</p>
+                <p><span>2</span> select aircraft and pilot profile</p>
+                <p><span>3</span> launch when ready</p>
             </div>
         </div>
     </div>
 
-    <button class="m-start" id="btn-start">Launch Mission</button>
-
     <div class="m-section mode-section">
-        <div class="m-label">Game Mode</div>
+        <div class="m-label"><span class="step-num">01</span> Select Game Mode</div>
         <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
             <button class="mode-card active" type="button" data-mode="single" aria-pressed="true"><b>Single</b><span>Balanced solo sortie with hostiles and objectives.</span></button>
             <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
@@ -49,8 +47,8 @@
         </div>
     </div>
 
-    <div class="m-section">
-        <div class="m-label">Aircraft &amp; Operator</div>
+    <div class="m-section aircraft-section">
+        <div class="m-label"><span class="step-num">02</span> Aircraft &amp; Pilot</div>
         <div class="m-body">
             <div class="m-row">
                 <label>Aircraft</label>
@@ -78,11 +76,19 @@
         </div>
     </div>
 
+    <div class="launch-panel">
+        <div>
+            <div class="m-label"><span class="step-num">03</span> Ready</div>
+            <p>Review the mode and aircraft, then enter the simulator.</p>
+        </div>
+        <button class="m-start" id="btn-start">Launch Mission</button>
+    </div>
+
     <details class="m-section about-section" open>
-        <summary>About This Build</summary>
+        <summary><span class="step-num">04</span> About This Build</summary>
         <div class="m-body about-grid">
             <div class="about-card"><b>Playable URL</b><a href="https://4riful.github.io/drone-simulator/" target="_blank" rel="noopener">4riful.github.io/drone-simulator</a></div>
-            <div class="about-card"><b>Author</b><a href="https://github.com/4riful" target="_blank" rel="noopener">Ariful Anik / 4riful</a></div>
+            <div class="about-card"><b>GitHub</b><a href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener">github.com/4riful/drone-simulator</a></div>
             <div class="about-card"><b>Status</b><span>Browser simulator prototype, moving toward real systems.</span></div>
         </div>
     </details>
@@ -111,24 +117,6 @@
         <summary>Mission Records</summary>
         <div class="m-body">
             <div id="db-stats">Loading mission records...</div>
-        </div>
-    </details>
-
-    <details class="m-section credits-section">
-        <summary>Author &amp; Resources</summary>
-        <div class="m-body credits-grid">
-            <div class="credit-card">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>
-                <div><b>Author</b><span>Ariful Anik / 4riful | github.com/4riful</span></div>
-            </div>
-            <div class="credit-card">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></svg>
-                <div><b>Font</b><span>JetBrains Mono, OFL-1.1</span></div>
-            </div>
-            <div class="credit-card">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9z"/><path d="M12 12l8 -4.5"/><path d="M12 12v9"/><path d="M12 12l-8 -4.5"/></svg>
-                <div><b>Graphics</b><span>Tabler Icons style, MIT; procedural Three.js scene</span></div>
-            </div>
         </div>
     </details>
 
@@ -287,7 +275,6 @@
 <div id="fuel-countdown"></div>
 <div id="fuel-warn-text"></div>
 <div id="game-meta"></div>
-<div id="resource-credit">Author: Ariful Anik / 4riful | github.com/4riful | UI: JetBrains Mono + Tabler Icons style</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
