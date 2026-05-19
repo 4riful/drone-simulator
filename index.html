@@ -26,23 +26,24 @@
                 <p>Choose the mode, airframe, and online room from this launcher. Press launch and the selected setup opens directly in gameplay.</p>
             </div>
 
-            <div class="radar-card" aria-label="drone radar graphic">
-                <span class="radar-axis axis-x"></span>
-                <span class="radar-axis axis-y"></span>
-                <span class="radar-ring ring-1"></span>
-                <span class="radar-ring ring-2"></span>
-                <span class="radar-ring ring-3"></span>
-                <span class="radar-sweep"></span>
-                <span class="radar-dot dot-a"></span>
-                <span class="radar-dot dot-b"></span>
-                <span class="radar-dot dot-c"></span>
-                <svg class="drone-mark" viewBox="0 0 160 120" aria-hidden="true">
-                    <path d="M80 17l18 34 42 12-37 16-23 25-23-25-37-16 42-12 18-34z"/>
-                    <path d="M80 49l14 18-14 32-14-32 14-18z"/>
-                    <circle cx="30" cy="62" r="10"/>
-                    <circle cx="130" cy="62" r="10"/>
-                </svg>
-                <div class="radar-label"><b>WEBGL READY</b><span>city sandbox online</span></div>
+            <div class="telemetry-card" aria-label="mission telemetry graphic">
+                <div class="telemetry-top">
+                    <span>MISSION MAP</span>
+                    <b>GRID A-17</b>
+                </div>
+                <div class="map-grid">
+                    <span class="route route-a"></span>
+                    <span class="route route-b"></span>
+                    <span class="node node-home">BASE</span>
+                    <span class="node node-target">OBJ</span>
+                    <span class="node node-threat">SAM</span>
+                    <span class="drone-cursor">DRN</span>
+                </div>
+                <div class="telemetry-readout">
+                    <div><span>ALT</span><b>120M</b></div>
+                    <div><span>LINK</span><b>100%</b></div>
+                    <div><span>FUEL</span><b>READY</b></div>
+                </div>
             </div>
 
             <div class="quick-stats">
@@ -64,23 +65,23 @@
             <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
                 <button class="mode-card active" type="button" data-mode="single" aria-pressed="true">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"/></svg>
-                    <b>Single</b><span>Combat sortie</span>
+                    <b>Single</b><span>Combat sortie</span><em>Hostiles / Score / Fuel</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="training" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v4H4V5zm2 6h12v8H6v-8zm3 2v4h6v-4H9z"/></svg>
-                    <b>Training</b><span>Learn controls</span>
+                    <b>Training</b><span>Learn controls</span><em>No combat pressure</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="mission" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 109 9h-3a6 6 0 11-6-6V3zm1 0v9h8a9 9 0 00-8-9z"/></svg>
-                    <b>Mission</b><span>High pressure</span>
+                    <b>Mission</b><span>High pressure</span><em>Objective weighted</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13l18-9-5 17-4-7-7 3-2-4z"/></svg>
-                    <b>Free Flight</b><span>Explore city</span>
+                    <b>Free Flight</b><span>Explore city</span><em>No enemies / Practice</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="multiplayer" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7a4 4 0 118 0 4 4 0 01-8 0zm-4 14a7 7 0 0114 0H3zm14-8a3 3 0 100-6 5.9 5.9 0 01.7 6H17zm1.5 8a8.9 8.9 0 00-2.4-5.4A6 6 0 0123 21h-4.5z"/></svg>
-                    <b>Online</b><span>2-player room</span>
+                    <b>Online</b><span>2-player room</span><em>Presence sync</em>
                 </button>
             </div>
 
