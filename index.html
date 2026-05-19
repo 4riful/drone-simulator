@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
-    <meta name="description" content="A browser-based drone simulator with single-player missions, training, free flight, and online room-code presence.">
+    <meta name="description" content="A browser drone simulator with solo missions and two-player online battle rooms.">
     <link rel="stylesheet" href="./src/home.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -12,23 +12,22 @@
     <main class="home-shell">
         <section class="hero" aria-labelledby="hero-title">
             <div class="hero-copy">
-                <img class="brand-logo" src="./logo.png" alt="Drone Simulator logo" onerror="this.hidden=true">
-                <p class="eyebrow">Browser Flight Simulator</p>
+                <p class="eyebrow">Terminal Battle Console</p>
                 <h1 id="hero-title">Drone Simulator</h1>
-                <p class="hero-text">Choose a mode, select an aircraft, then launch into the playable WebGL simulator. The homepage is separate from the game runtime, so nothing starts in the background.</p>
+                <p class="hero-text">Set the mode, pick an aircraft, create or join a two-player battle room, then launch the WebGL simulator. This page is only the launcher; the game runtime starts on the gameplay page.</p>
                 <div class="terminal-window" aria-label="live terminal status">
                     <div class="terminal-bar"><span></span><span></span><span></span><b>ops@drone-sim:~/launch</b></div>
                     <div class="terminal-feed" id="terminal-feed">
-                        <p>&gt; realtime systems ready</p>
-                        <p>&gt; select mode and aircraft</p>
+                        <p>&gt; battle terminal online</p>
+                        <p>&gt; choose solo or online duel</p>
                         <p>&gt; launch package standing by</p>
                     </div>
                 </div>
             </div>
             <div class="status-card" aria-label="build status">
-                <span>Live Build</span>
-                <b>GitHub Pages</b>
-                <small>Three.js cockpit, local profiles, Supabase room presence.</small>
+                <span>Online Battle</span>
+                <b>2 Players</b>
+                <small>Create a room, copy the invite, and fight with another pilot through Supabase presence sync.</small>
                 <div class="radar" aria-hidden="true"><i></i><b></b><em></em></div>
             </div>
         </section>
@@ -38,7 +37,7 @@
                 <div class="panel-head">
                     <span class="step">01</span>
                     <div>
-                        <h2>Select Game Mode</h2>
+                        <h2>Select Mode</h2>
                         <p id="mode-brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</p>
                     </div>
                 </div>
@@ -47,17 +46,17 @@
                     <button class="choice" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>No combat pressure.</span></button>
                     <button class="choice" type="button" data-mode="mission" aria-pressed="false"><b>Mission</b><span>Higher pressure scoring.</span></button>
                     <button class="choice" type="button" data-mode="freeflight" aria-pressed="false"><b>Free Flight</b><span>Explore and practice.</span></button>
-                    <button class="choice" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online</b><span>Room-code ghost sync.</span></button>
+                    <button class="choice" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Battle</b><span>Two-player battle room.</span></button>
                 </div>
                 <div class="room-panel" id="room-panel" hidden>
-                    <label for="room-code">Room Code</label>
+                    <label for="room-code">Battle Room Code</label>
                     <div class="room-row">
                         <input id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
-                        <button class="small-btn" id="btn-room-code" type="button">Create</button>
-                        <button class="small-btn" id="btn-join-room" type="button">Check</button>
-                        <button class="small-btn" id="btn-copy-room" type="button">Copy Link</button>
+                        <button class="small-btn" id="btn-room-code" type="button">Create Battle</button>
+                        <button class="small-btn" id="btn-join-room" type="button">Join Battle</button>
+                        <button class="small-btn" id="btn-copy-room" type="button">Copy Invite</button>
                     </div>
-                    <p id="room-status">Create a code or paste one from another player.</p>
+                    <p id="room-status">Create a battle room, or paste a code from another player and join.</p>
                 </div>
             </div>
 
@@ -90,7 +89,7 @@
                     </div>
                 </div>
                 <button class="launch-btn" id="btn-launch" type="button">Launch Simulator</button>
-                <p class="launch-note">Launch opens the gameplay page and passes your selected mode, aircraft, and room code.</p>
+                <p class="launch-note">Online Battle launches the same room for both pilots. Remote pilots appear as radar contacts in-game.</p>
             </div>
 
             <div class="panel about-panel">
@@ -98,7 +97,7 @@
                     <span class="step">04</span>
                     <div>
                         <h2>About This Build</h2>
-                        <p>Clean static homepage, separate gameplay page, and deployable GitHub Pages build.</p>
+                        <p>Separate static launcher, separate gameplay page, and deployable GitHub Pages build.</p>
                     </div>
                 </div>
                 <div class="about-list">

@@ -3,7 +3,7 @@ const MODES = {
   training: 'Safer flight school with combat pressure removed so you can learn controls.',
   mission: 'Higher-pressure sortie with stronger scoring and combat objectives.',
   freeflight: 'Open exploration mode for landing practice, camera work, and flight handling.',
-  multiplayer: 'Create or join a Supabase room-code session with synced remote ghost drones.'
+  multiplayer: 'Create or join a two-player battle room. The other pilot appears as a remote radar contact in-game.'
 };
 
 const AIRCRAFT = {
@@ -23,17 +23,18 @@ const ONLINE_CONFIG = {
 };
 
 const TERMINAL_LINES = [
-  '> realtime link: standby',
-  '> gps model: browser simulated',
-  '> profile storage: local indexeddb',
-  '> supabase presence: room-code ready',
-  '> webgl cockpit: launch isolated',
-  '> map sync: remote ghosts enabled'
+  '> battle room link: standby',
+  '> player one creates room code',
+  '> player two joins same code',
+  '> supabase presence: duel sync ready',
+  '> radar contacts: remote pilot enabled',
+  '> webgl cockpit: launch isolated'
 ];
 
 let selectedMode = 'single';
 let selectedAircraft = 'drone';
 let supabaseModulePromise = null;
+let lastRoomCheck = { room: '', activePilots: 0, ok: false };
 
 const $modeBrief = document.getElementById('mode-brief');
 const $aircraftBrief = document.getElementById('aircraft-brief');
@@ -104,20 +105,24 @@ document.getElementById('aircraft-grid').addEventListener('click', (event) => {
 
 document.getElementById('btn-room-code').addEventListener('click', () => {
   $roomCode.value = makeRoomCode();
-  $roomStatus.textContent = `Room ${$roomCode.value} ready. Share the link or launch now.`;
-  pushTerminal(`> created room ${$roomCode.value}`);
+  lastRoomCheck = { room: $roomCode.value, activePilots: 0, ok: true };
+  $roomStatus.textContent = `Battle room ${$roomCode.value} created. Copy the invite for player two, then launch.`;
+  pushTerminal(`> created battle room ${$roomCode.value}`);
 });
 
 document.getElementById('btn-join-room').addEventListener('click', async () => {
+  selectedMode = 'multiplayer';
+  setActive('[data-mode]', 'mode', selectedMode);
+  updateSummary();
   const room = normalizeRoom($roomCode.value);
   if (!room) {
-    $roomStatus.textContent = 'Enter a room code first.';
-    pushTerminal('> room check failed: missing code');
+    $roomStatus.textContent = 'Enter the battle room code from player one, or create a new battle.';
+    pushTerminal('> join blocked: missing battle code');
     return;
   }
   $roomCode.value = room;
-  $roomStatus.textContent = `Checking ${room}...`;
-  pushTerminal(`> checking room ${room}`);
+  $roomStatus.textContent = `Checking battle room ${room}...`;
+  pushTerminal(`> checking battle room ${room}`);
   try {
     if (!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
     const { createClient } = await supabaseModulePromise;
@@ -138,13 +143,15 @@ document.getElementById('btn-join-room').addEventListener('click', async () => {
       });
     });
     await channel.unsubscribe();
+    lastRoomCheck = { room, activePilots, ok: true };
     $roomStatus.textContent = activePilots > 0
-      ? `Active room found: ${activePilots} pilot(s) currently online.`
-      : `Room ${room} is reachable. No active pilot is visible yet.`;
-    pushTerminal(activePilots > 0 ? `> room active: ${activePilots} pilot(s)` : '> room reachable: waiting for pilot');
+      ? `Battle room ${room} active - ${activePilots} pilot(s) online. Launch to fight.`
+      : `Battle room ${room} is open. Launch now and wait for player two.`;
+    pushTerminal(activePilots > 0 ? `> battle active: ${activePilots} pilot(s), launch to fight` : '> battle room open: waiting for player two');
   } catch (_) {
-    $roomStatus.textContent = 'Room check failed. Recheck network or Supabase realtime access.';
-    pushTerminal('> room check failed: realtime error');
+    lastRoomCheck = { room, activePilots: 0, ok: false };
+    $roomStatus.textContent = 'Battle room check failed. Recheck the code, network, or Supabase realtime access.';
+    pushTerminal('> battle room check failed');
   }
 });
 
@@ -153,7 +160,7 @@ document.getElementById('btn-copy-room').addEventListener('click', async () => {
   const url = gameUrl().toString();
   try {
     await navigator.clipboard.writeText(url);
-    $roomStatus.textContent = `Invite copied for ${normalizeRoom($roomCode.value)}.`;
+    $roomStatus.textContent = `Invite copied for ${normalizeRoom($roomCode.value)}. Player two opens it, selects Launch, and joins the battle.`;
     pushTerminal('> invite link copied');
   } catch (_) {
     $roomStatus.textContent = url;
@@ -163,6 +170,12 @@ document.getElementById('btn-copy-room').addEventListener('click', async () => {
 
 document.getElementById('btn-launch').addEventListener('click', () => {
   if (selectedMode === 'multiplayer' && !$roomCode.value) $roomCode.value = makeRoomCode();
+  if (selectedMode === 'multiplayer') {
+    const room = normalizeRoom($roomCode.value);
+    if (lastRoomCheck.room !== room || !lastRoomCheck.ok) {
+      $roomStatus.textContent = `Launching battle room ${room}. Remote pilots appear as radar contacts after they enter.`;
+    }
+  }
   pushTerminal('> launching gameplay page');
   location.href = gameUrl().toString();
 });

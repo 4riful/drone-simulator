@@ -56,7 +56,7 @@ const GAME_MODES = {
     training: { label:'Training', brief:'Flight school mode: no hostile drones, slower scoring, safer fuel reserve.', enemies:false, scoreMul:0.35, fuelStart:100, objective:false },
     mission: { label:'Mission', brief:'Full mission profile: hostile drones, objectives, and higher score weight.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
     freeflight: { label:'Free Flight', brief:'Open practice mode: explore, land, and tune controls without combat.', enemies:false, scoreMul:0, fuelStart:100, objective:false },
-    multiplayer: { label:'Online Lab', brief:'Create a room code, share the invite link, and fly together as synced ghost drones.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
+    multiplayer: { label:'Online Battle', brief:'Create a two-player battle room, share the invite, and fight with remote radar contacts.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
 };
 const ONLINE_DEFAULTS = {
     room:'',
@@ -694,7 +694,7 @@ async function copyOnlineInvite(){
 }
 function getOnlineStateLabel(){
     if(onlineConnected) return `Online ${remotePilots.size+1} pilot(s)`;
-    return onlineConfig.room ? `Ready. Room ${onlineConfig.room}` : 'Ready. Create or join a room.';
+    return onlineConfig.room ? `Ready. Battle ${onlineConfig.room}` : 'Ready. Create or join a battle.';
 }
 async function checkOnlineRoomPresence(room){
     const checkedRoom = normalizeRoomId(room);
@@ -721,7 +721,7 @@ async function checkOnlineRoomPresence(room){
 function updateOnlineStatus(){
     if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), 'good'); return; }
     const remoteCount = remotePilots.size;
-    const txt = remoteCount ? `Online ${remoteCount+1} pilot(s) - ${remoteCount} remote visible` : `Online 1 pilot - waiting for room ${onlineConfig.room}`;
+    const txt = remoteCount ? `Online ${remoteCount+1} pilot(s) - ${remoteCount} radar contact(s)` : `Online 1 pilot - waiting for room ${onlineConfig.room}`;
     setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
 }
 function makeRemoteDrone(){
@@ -764,7 +764,7 @@ function updateRemotePilots(dt){
 async function connectOnlineRoom(){
     if(S.gameMode!=='multiplayer') return;
     await saveOnlineRoom();
-    if(!onlineConfig.room){setOnlineStatus('Create or enter a room code first.', 'bad');notify('CREATE OR JOIN ROOM','kill-note');return;}
+    if(!onlineConfig.room){setOnlineStatus('Create or enter a battle code first.', 'bad');notify('CREATE OR JOIN BATTLE','kill-note');return;}
     if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus('Online backend is not configured.', 'bad');notify('ONLINE CONFIG MISSING','kill-note');return;}
     try{
         if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
@@ -3355,7 +3355,7 @@ function updMinimap(){
     mmC.fillStyle='#40b8e0';for(const r of rings){if(r.userData.got)continue;const dx=(r.position.x-drone.position.x)*sc,dz2=(r.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#60a0d0';for(const o of orbs){if(o.userData.got)continue;const dx=(o.position.x-drone.position.x)*sc,dz2=(o.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#e05540';for(const e of enemies){const dx=(e.position.x-drone.position.x)*sc,dz2=(e.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,3,0,Math.PI*2);mmC.fill();}
-    mmC.fillStyle='#49d8ff';mmC.strokeStyle='rgba(73,216,255,.65)';mmC.lineWidth=1.5;for(const rp of remotePilots.values()){if(!rp.mesh.visible)continue;const dx=(rp.mesh.position.x-drone.position.x)*sc,dz2=(rp.mesh.position.z-drone.position.z)*sc;if(Math.abs(dx)>74||Math.abs(dz2)>74)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,4,0,Math.PI*2);mmC.fill();mmC.beginPath();mmC.arc(cx+dx,cy+dz2,7,0,Math.PI*2);mmC.stroke();}
+    mmC.fillStyle='#49d8ff';mmC.strokeStyle='rgba(73,216,255,.8)';mmC.lineWidth=1.5;for(const rp of remotePilots.values()){if(!rp.mesh.visible)continue;const dx=(rp.mesh.position.x-drone.position.x)*sc,dz2=(rp.mesh.position.z-drone.position.z)*sc;const px=THREE.MathUtils.clamp(cx+dx,8,MM-8),py=THREE.MathUtils.clamp(cy+dz2,8,MM-8);const far=px!==cx+dx||py!==cy+dz2;mmC.beginPath();mmC.arc(px,py,far?5:4,0,Math.PI*2);mmC.fill();mmC.beginPath();mmC.arc(px,py,far?9:7,0,Math.PI*2);mmC.stroke();if(far){mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(px,py);mmC.stroke();}}
     mmC.fillStyle='#60c0e8';mmC.beginPath();mmC.arc(cx,cy,3,0,Math.PI*2);mmC.fill();
     const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(drone.quaternion);mmC.strokeStyle='#60c0e8';mmC.lineWidth=1.5;mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(cx+fwd.x*12,cy+fwd.z*12);mmC.stroke();
     mmC.strokeStyle='rgba(60,90,120,.3)';mmC.lineWidth=1;mmC.strokeRect(0,0,MM,MM);

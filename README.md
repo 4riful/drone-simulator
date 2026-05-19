@@ -1,6 +1,8 @@
 # Drone Simulator
 
-![Drone Simulator logo](./logo.png)
+<p align="center">
+  <img src="./logo.png" alt="Drone Simulator logo" width="120">
+</p>
 
 Browser-playable drone simulator prototype built with Three.js, a terminal-style cockpit UI, local pilot profiles, multiple game modes, and a roadmap toward a more physically correct flight model.
 
@@ -15,7 +17,7 @@ This project is playable today, but it is still a simulator-game prototype. The 
 - Playable directly from GitHub Pages with a dedicated terminal-themed landing page and gameplay page.
 - Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
-- Game modes: Single, Training, Mission, Free Flight, and Online Lab.
+- Game modes: Single, Training, Mission, Free Flight, and Online Battle.
 - Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time.
 - Profile personas: Recon Specialist, Combat Pilot, Test Pilot, and Instructor.
 - Assisted flight systems with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, GPS status, and warning messages.
@@ -26,18 +28,18 @@ This project is playable today, but it is still a simulator-game prototype. The 
 
 ## Free Online Multiplayer Setup
 
-GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime presence**. It gives Online Lab shared rooms and synced ghost/co-op drones without paying for a server.
+GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime presence**. It gives Online Battle shared two-player rooms and synced remote aircraft without paying for a server.
 
 The app is already configured with the project's public Supabase key.
 
-1. Open the simulator and choose **Online Lab**.
-2. Click **Create Room** to generate a code such as `DRN-482K`.
-3. Click **Check** to verify that Supabase Realtime is reachable for that code and to see whether another pilot is already present.
-4. Click **Copy Link** and share it with another player.
-5. The other player opens the invite URL or enters the same room code, then launches Online Lab.
-6. Both players see synced remote ghost drones and minimap markers.
+1. Open the simulator and choose **Online Battle**.
+2. Click **Create Battle** to generate a code such as `DRN-482K`.
+3. Click **Copy Invite** and share it with player two.
+4. Player two opens the invite URL or enters the same battle code and clicks **Join Battle**.
+5. Both players launch the same battle room.
+6. Both players see synced remote aircraft, HUD online count, and radar/minimap contacts.
 
-Current Online Lab syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote ghost drones. Combat synchronization and authoritative validation should come later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
+Current Online Battle syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote aircraft. Combat hit validation is still client-side prototype logic and should become authoritative later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
 
 ## Controls
 
@@ -95,7 +97,7 @@ npm run preview
 - `src/styles.css`: terminal UI, cockpit HUD, menu, profile, help, and responsive styling.
 - `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
 - `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
-- `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Lab rooms.
+- `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Battle rooms.
 - `check-module.mjs`: syntax check for the simulator module.
 - `ROADMAP.md`: phased project direction.
 - `ATTRIBUTIONS.md`: open-resource credits.
@@ -120,6 +122,6 @@ npm run preview
 ## Known Limitations
 
 - The current flight loop still uses target horizontal and vertical velocities rather than full rigid-body physics.
-- Online Lab uses Supabase Realtime presence, not an authoritative combat server.
+- Online Battle uses Supabase Realtime presence, not an authoritative combat server.
 - Profile data is local to the browser through IndexedDB/localStorage fallback.
 - No official license file has been added yet.

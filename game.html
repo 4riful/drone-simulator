@@ -37,18 +37,18 @@
             <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
             <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>Mission</b><span>Full combat mission with stronger scoring pressure.</span></button>
             <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><b>Free Flight</b><span>Explore, practice landings, no enemies.</span></button>
-            <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Lab</b><span>Free Supabase Realtime room/presence mode.</span></button>
+            <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Battle</b><span>Two-player battle room with radar contacts.</span></button>
         </div>
         <div id="mode-brief" class="mode-brief">Single pilot combat sortie. Existing systems stay enabled.</div>
         <div id="online-setup" class="online-setup">
-            <div class="m-label">Online Multiplayer</div>
-            <div class="m-row"><label>Room</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="DRN-482K"></div>
+            <div class="m-label">Online Battle Room</div>
+            <div class="m-row"><label>Battle Code</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="DRN-482K"></div>
             <div class="online-actions">
-                <button class="btn btn-sm" id="btn-room-create" type="button">Create Room</button>
-                <button class="btn btn-sm" id="btn-room-join" type="button">Join Room</button>
-                <button class="btn btn-sm" id="btn-room-copy" type="button">Copy Link</button>
+                <button class="btn btn-sm" id="btn-room-create" type="button">Create Battle</button>
+                <button class="btn btn-sm" id="btn-room-join" type="button">Join Battle</button>
+                <button class="btn btn-sm" id="btn-room-copy" type="button">Copy Invite</button>
             </div>
-            <div class="online-actions"><span id="online-status">Ready. Create or join a room.</span></div>
+            <div class="online-actions"><span id="online-status">Ready. Create a battle or join by code.</span></div>
         </div>
     </div>
 
@@ -129,7 +129,7 @@
         <div class="m-tag">Flight Manual</div>
         <h1>Help</h1>
         <div class="help-grid">
-            <section><b>Modes</b><p>Single and Mission enable combat objectives. Training removes pressure. Free Flight disables enemies. Online Lab uses free Supabase Realtime presence when configured.</p></section>
+            <section><b>Modes</b><p>Single and Mission enable combat objectives. Training removes pressure. Free Flight disables enemies. Online Battle uses free Supabase Realtime presence for two-player battle rooms.</p></section>
             <section><b>Profiles</b><p>Profiles store local sorties, score, flight time, preferred persona, and selected mode in this browser.</p></section>
             <section><b>Flight Logic</b><p>The current controller is assisted. Treat speed, altitude, link, GPS, battery, wind, and air density as operational limits. A force/torque rewrite is documented in the repo.</p></section>
             <section><b>Controls</b><p>W/S pitch, A/D roll, Q/E yaw, Space climb, Shift descend, F fire, Tab boost, B or Ctrl brake, T lock, L follow, H help, Esc pause.</p></section>
