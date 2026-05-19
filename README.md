@@ -17,7 +17,7 @@ This project is playable today, but it is still a simulator-game prototype. The 
 - Playable directly from GitHub Pages.
 - Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
-- Game modes: Single, Training, Mission, Free Flight, and Online Lab placeholder.
+- Game modes: Single, Training, Mission, Free Flight, and Online Lab.
 - Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time.
 - Profile personas: Recon Specialist, Combat Pilot, Test Pilot, and Instructor.
 - Assisted flight systems with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, GPS status, and warning messages.
@@ -26,16 +26,17 @@ This project is playable today, but it is still a simulator-game prototype. The 
 - Help screen with controls, mode explanations, profile notes, and simulator limitations.
 - Keyboard, mouse, and gamepad support.
 
-## Online Multiplayer Reality
+## Free Online Multiplayer Setup
 
-GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The in-game **Online Lab** is intentionally marked experimental until one of these backends is connected:
+GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime presence**. It gives Online Lab shared rooms and synced ghost/co-op drones without paying for a server.
 
-- Supabase Realtime for lightweight rooms and ghost/co-op drones.
-- WebRTC with a signaling service for peer-hosted sessions.
-- Node WebSocket server on Render, Fly.io, Railway, or similar.
-- Colyseus or PartyKit for a more game-specific networking layer.
+1. Create a free project at https://supabase.com/.
+2. In Supabase, open **Project Settings -> API**.
+3. Copy the project URL and `anon public` key.
+4. Open the simulator, choose **Online Lab**, and paste the URL/key into **Free Online Setup**.
+5. Pick a room code such as `alpha-room`, save, then launch Online Lab on two browsers/devices with the same room code.
 
-The first recommended multiplayer milestone is ghost/co-op presence: room code, callsign, aircraft, position, rotation, health, and mission state. Combat synchronization should come later with validation.
+Current Online Lab syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote ghost drones. Combat synchronization and authoritative validation should come later.
 
 ## Controls
 
@@ -90,6 +91,7 @@ npm run preview
 - `src/styles.css`: terminal UI, cockpit HUD, menu, profile, help, and responsive styling.
 - `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
 - `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
+- `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Lab rooms.
 - `check-module.mjs`: syntax check for the simulator module.
 - `ROADMAP.md`: phased project direction.
 - `ATTRIBUTIONS.md`: author and open-resource credits.
@@ -114,6 +116,6 @@ npm run preview
 ## Known Limitations
 
 - The current flight loop still uses target horizontal and vertical velocities rather than full rigid-body physics.
-- Online Lab is a UI/product shell only until a backend is selected.
+- Online Lab uses Supabase Realtime presence, not an authoritative combat server.
 - Profile data is local to the browser through IndexedDB/localStorage fallback.
 - No official license file has been added yet.

@@ -34,9 +34,16 @@
             <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
             <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>Mission</b><span>Full combat mission with stronger scoring pressure.</span></button>
             <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><b>Free Flight</b><span>Explore, practice landings, no enemies.</span></button>
-            <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Lab</b><span>Multiplayer shell; needs a realtime backend.</span></button>
+            <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Lab</b><span>Free Supabase Realtime room/presence mode.</span></button>
         </div>
         <div id="mode-brief" class="mode-brief">Single pilot combat sortie. Existing systems stay enabled.</div>
+        <div id="online-setup" class="online-setup">
+            <div class="m-label">Free Online Setup</div>
+            <div class="m-row"><label>Room</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="public-room"></div>
+            <div class="m-row"><label>URL</label><input id="online-url" class="m-input" type="url" placeholder="https://your-project.supabase.co"></div>
+            <div class="m-row"><label>Anon Key</label><input id="online-key" class="m-input" type="password" placeholder="Supabase anon public key"></div>
+            <div class="online-actions"><button class="btn btn-sm" id="btn-online-save" type="button">Save Online</button><span id="online-status">Offline. Supabase free config required.</span></div>
+        </div>
     </div>
 
     <div class="m-section">
@@ -134,7 +141,7 @@
         <div class="m-tag">Flight Manual</div>
         <h1>Help</h1>
         <div class="help-grid">
-            <section><b>Modes</b><p>Single and Mission enable combat objectives. Training removes pressure. Free Flight disables enemies. Online Lab is a multiplayer placeholder until a realtime backend is connected.</p></section>
+            <section><b>Modes</b><p>Single and Mission enable combat objectives. Training removes pressure. Free Flight disables enemies. Online Lab uses free Supabase Realtime presence when configured.</p></section>
             <section><b>Profiles</b><p>Profiles store local sorties, score, flight time, preferred persona, and selected mode in this browser.</p></section>
             <section><b>Flight Logic</b><p>The current controller is assisted. Treat speed, altitude, link, GPS, battery, wind, and air density as operational limits. A force/torque rewrite is documented in the repo.</p></section>
             <section><b>Controls</b><p>W/S pitch, A/D roll, Q/E yaw, Space climb, Shift descend, F fire, Tab boost, B or Ctrl brake, T lock, L follow, H help, Esc pause.</p></section>
@@ -263,6 +270,7 @@
         <span>LINK <span class="val" id="ss-link">GOOD</span></span><span class="sep">|</span>
         <span>GPS <span class="val" id="ss-gps">3D</span></span><span class="sep">|</span>
         <span>MODE <span class="val" id="ss-mode">SINGLE</span></span><span class="sep">|</span>
+        <span>ONLINE <span class="val" id="ss-online">OFF</span></span><span class="sep">|</span>
         <span>LAT <span class="val" id="ss-lat">--</span></span><span class="sep">|</span>
         <span>LON <span class="val" id="ss-lon">--</span></span><span class="sep">|</span>
         <span id="ss-fps" class="val"></span>

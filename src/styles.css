@@ -178,7 +178,7 @@ body::before {
 .mode-card:hover, .mode-card:focus { border-color: var(--accent); outline: none; transform: translateY(-1px); }
 .mode-card.active { border-color: var(--accent); background: rgba(99,255,156,.11); box-shadow: inset 0 0 0 1px rgba(99,255,156,.12), 0 0 22px rgba(99,255,156,.11); }
 .mode-card.experimental { border-color: rgba(255,184,77,.28); }
-.mode-brief, .persona-brief {
+.mode-brief, .persona-brief, .online-setup {
     font-size: 10px;
     line-height: 1.55;
     color: var(--muted);
@@ -188,6 +188,29 @@ body::before {
     padding: 8px 10px;
 }
 .persona-brief { margin: -2px 0 8px 70px; }
+.online-setup { display: none; margin-top: 8px; }
+.online-setup.show { display: block; }
+.online-setup .m-label { padding-top: 0; }
+.online-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.online-actions span { flex: 1; min-width: 180px; color: var(--muted); font-size: 10px; }
+.online-actions span.online-good { color: var(--accent); }
+.online-actions span.online-warn { color: var(--warn); }
+.online-actions span.online-bad { color: var(--danger); }
+.remote-drone-label {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    padding: 4px 7px;
+    border: 1px solid rgba(73,216,255,.35);
+    border-radius: 999px;
+    background: rgba(0,10,14,.72);
+    color: var(--accent-2);
+    font-size: 9px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 20;
+    text-transform: uppercase;
+    box-shadow: 0 0 16px rgba(73,216,255,.18);
+}
 .about-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .about-card {
     padding: 9px 10px;
@@ -714,6 +737,7 @@ body::before {
     .m-keys { grid-template-columns: 1fr; }
     .mode-grid, .help-grid { grid-template-columns: 1fr; }
     .persona-brief { margin-left: 0; }
+    .online-actions { align-items: stretch; }
     .terminal-lines { font-size: 10px; }
     #game-meta, #resource-credit { left: 8px; right: 8px; width: auto; text-align: center; }
     #resource-credit { bottom: 6px; }

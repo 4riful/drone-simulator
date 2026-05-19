@@ -1,6 +1,8 @@
 
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
+const SUPABASE_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
 const C = {
     citySize: 500, blockSize: 44, buildChance: 0.48,
     enemyCount: 7, ringCount: 22, orbCount: 18,
@@ -48,15 +50,16 @@ let lastImpactAt = 0;
 const GAME_META = {
     version: 'v3.2.0',
     coder: 'Ariful Anik / 4riful',
-    note: 'Profile modes and realism roadmap'
+    note: 'Free online lab and realism roadmap'
 };
 const GAME_MODES = {
     single: { label:'Single', brief:'Single pilot combat sortie. Existing systems stay enabled.', enemies:true, scoreMul:1, fuelStart:100, objective:true },
     training: { label:'Training', brief:'Flight school mode: no hostile drones, slower scoring, safer fuel reserve.', enemies:false, scoreMul:0.35, fuelStart:100, objective:false },
     mission: { label:'Mission', brief:'Full mission profile: hostile drones, objectives, and higher score weight.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
     freeflight: { label:'Free Flight', brief:'Open practice mode: explore, land, and tune controls without combat.', enemies:false, scoreMul:0, fuelStart:100, objective:false },
-    multiplayer: { label:'Online Lab', brief:'Experimental multiplayer shell. GitHub Pages needs Supabase/WebRTC/Socket backend before real live rooms.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
+    multiplayer: { label:'Online Lab', brief:'Free Supabase Realtime presence rooms. Add URL + anon key, share room code, and fly together as synced ghost drones.', enemies:false, scoreMul:0, fuelStart:100, objective:false, experimental:true }
 };
+const ONLINE_DEFAULTS = { room:'public-room', url:'', key:'' };
 const PERSONAS = {
     recon: { label:'Recon Specialist', rank:'ISR-2', badge:'RECON', brief:'Stable sensor-first pilot. Better signal discipline, lighter combat bonus.', signalBonus:8, scoreMul:0.95, fuelMul:0.96 },
     combat: { label:'Combat Pilot', rank:'CMB-3', badge:'STRIKE', brief:'Aggressive weapons pilot. Higher kill score, heavier fuel burn.', signalBonus:0, scoreMul:1.12, fuelMul:1.08 },
@@ -592,6 +595,135 @@ const lowHpWarn = document.getElementById('low-hp-warn');
 function notify(msg, cls='kill-note'){
     const el=document.createElement('div'); el.className=cls; el.textContent=msg;
     killFeed.appendChild(el); setTimeout(()=>el.remove(), 2000);
+}
+
+let supabaseModulePromise = null;
+let supabaseClient = null;
+let onlineChannel = null;
+let onlineConnected = false;
+let onlineLastTrack = 0;
+let onlineConfig = {...ONLINE_DEFAULTS};
+const onlineClientId = sessionStorage.getItem('drone.onlineClientId') || `pilot_${Math.random().toString(36).slice(2,10)}_${Date.now().toString(36)}`;
+sessionStorage.setItem('drone.onlineClientId', onlineClientId);
+const remotePilots = new Map();
+const remoteDroneMat = new THREE.MeshBasicMaterial({ color:0x49d8ff, wireframe:true, transparent:true, opacity:0.68 });
+function normalizeRoomId(room){
+    return String(room||ONLINE_DEFAULTS.room).toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32) || ONLINE_DEFAULTS.room;
+}
+function setOnlineStatus(text, kind='warn'){
+    const el=document.getElementById('online-status');
+    if(el){el.textContent=text;el.classList.remove('online-good','online-warn','online-bad');el.classList.add(`online-${kind}`);}
+    if(ssOnline){ssOnline.textContent = text.toUpperCase().includes('ONLINE') ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
+}
+async function loadOnlineConfig(){
+    const saved = await dbGetSetting('onlineConfig');
+    onlineConfig = {...ONLINE_DEFAULTS, ...(saved||{})};
+    onlineConfig.room = normalizeRoomId(onlineConfig.room);
+    const roomEl=document.getElementById('online-room'),urlEl=document.getElementById('online-url'),keyEl=document.getElementById('online-key');
+    if(roomEl) roomEl.value=onlineConfig.room;
+    if(urlEl) urlEl.value=onlineConfig.url;
+    if(keyEl) keyEl.value=onlineConfig.key;
+    setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Supabase free config required.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+}
+async function saveOnlineConfig(){
+    const roomEl=document.getElementById('online-room'),urlEl=document.getElementById('online-url'),keyEl=document.getElementById('online-key');
+    onlineConfig = {
+        room: normalizeRoomId(roomEl?.value || onlineConfig.room),
+        url: (urlEl?.value || '').trim().replace(/\/$/,''),
+        key: (keyEl?.value || '').trim()
+    };
+    if(roomEl) roomEl.value=onlineConfig.room;
+    await dbSetSetting('onlineConfig', onlineConfig);
+    setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Saved. Launch Online Lab to connect.':'Saved, but URL/key still missing.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+}
+function getOnlineStateLabel(){
+    if(onlineConnected) return `Online ${remotePilots.size+1} pilot(s)`;
+    return onlineConfig.url&&onlineConfig.key ? 'Ready. Launch Online Lab to connect.' : 'Offline. Supabase free config required.';
+}
+function makeRemoteDrone(){
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4,0.45,1.25), remoteDroneMat);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.45,1.1,4), remoteDroneMat);
+    nose.rotation.x=Math.PI/2;nose.position.z=-1.15;
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(4.4,0.08,0.18), remoteDroneMat);
+    const label=document.createElement('div');label.className='remote-drone-label';label.textContent='REMOTE';label.style.display='none';document.body.appendChild(label);
+    g.add(body,nose,wing);g.userData.label=label;g.visible=false;scene.add(g);return g;
+}
+function ensureRemotePilot(id,state){
+    if(!remotePilots.has(id)) remotePilots.set(id,{mesh:makeRemoteDrone(),lastSeen:performance.now(),state:null});
+    const rp=remotePilots.get(id);rp.lastSeen=performance.now();rp.state=state;return rp;
+}
+function removeRemotePilot(id){
+    const rp=remotePilots.get(id);if(!rp)return;
+    scene.remove(rp.mesh);rp.mesh.userData.label?.remove();remotePilots.delete(id);setOnlineStatus(onlineConnected?`Online ${remotePilots.size+1} pilot(s)`:'Offline',onlineConnected?'good':'warn');
+}
+function cleanupRemotePilots(){
+    for(const id of [...remotePilots.keys()]) removeRemotePilot(id);
+}
+function updateRemotePilots(dt){
+    const now=performance.now();
+    for(const [id,rp] of remotePilots){
+        if(now-rp.lastSeen>12000){removeRemotePilot(id);continue;}
+        const s=rp.state;if(!s)continue;
+        rp.mesh.visible=true;
+        rp.mesh.position.lerp(new THREE.Vector3(s.p[0],s.p[1],s.p[2]),Math.min(1,dt*8));
+        rp.mesh.quaternion.slerp(new THREE.Quaternion(s.q[0],s.q[1],s.q[2],s.q[3]),Math.min(1,dt*8));
+        const label=rp.mesh.userData.label;
+        if(label){
+            const v=rp.mesh.position.clone().project(camera);
+            const on=v.z<1&&Math.abs(v.x)<1.2&&Math.abs(v.y)<1.2;
+            label.style.display=on?'block':'none';
+            if(on){label.style.left=((v.x*.5+.5)*innerWidth)+'px';label.style.top=((-v.y*.5+.5)*innerHeight)+'px';label.textContent=`${s.name||'REMOTE'} ${Math.round(rp.mesh.position.distanceTo(drone.position))}m`;}
+        }
+    }
+}
+async function connectOnlineRoom(){
+    if(S.gameMode!=='multiplayer') return;
+    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus('Offline. Add free Supabase URL/key.', 'bad');notify('ADD SUPABASE FREE CONFIG','kill-note');return;}
+    try{
+        if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
+        const { createClient } = await supabaseModulePromise;
+        if(!supabaseClient) supabaseClient = createClient(onlineConfig.url, onlineConfig.key, { auth:{ persistSession:false, autoRefreshToken:false } });
+        if(onlineChannel) await disconnectOnlineRoom();
+        const room = normalizeRoomId(onlineConfig.room);
+        onlineChannel = supabaseClient.channel(`drone-simulator:${room}`, { config:{ presence:{ key: onlineClientId } } });
+        onlineChannel.on('presence',{event:'sync'},()=>{
+            const state=onlineChannel.presenceState();
+            const seen=new Set();
+            for(const [id,rows] of Object.entries(state)){
+                if(id===onlineClientId) continue;
+                const latest=rows?.[rows.length-1];
+                if(latest?.p&&latest?.q){seen.add(id);ensureRemotePilot(id,latest);}
+            }
+            for(const id of remotePilots.keys()) if(!seen.has(id)) removeRemotePilot(id);
+            setOnlineStatus(`Online ${remotePilots.size+1} pilot(s)`, 'good');
+        });
+        onlineChannel.on('broadcast',{event:'state'},payload=>{
+            const s=payload.payload;if(!s||s.id===onlineClientId||!s.p||!s.q)return;ensureRemotePilot(s.id,s);
+        });
+        onlineChannel.subscribe(async status=>{
+            if(status==='SUBSCRIBED'){
+                onlineConnected=true;setOnlineStatus(`Online ${remotePilots.size+1} pilot(s)`, 'good');notify(`ONLINE ROOM ${room}`,'ring-note');await trackOnlineState(true);
+            }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
+                onlineConnected=false;setOnlineStatus(`Online ${status.toLowerCase()}`, 'bad');
+            }
+        });
+    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus('Online failed. Check Supabase config.', 'bad');notify('ONLINE CONNECT FAILED','kill-note');}
+}
+async function disconnectOnlineRoom(){
+    if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
+    onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Supabase free config required.', onlineConfig.url&&onlineConfig.key?'good':'warn');
+}
+function onlinePayload(){
+    return { id:onlineClientId, profileId:activeProfileId, name:activeProfile?.name||'Pilot', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
+}
+async function trackOnlineState(force=false){
+    if(!onlineConnected||!onlineChannel) return;
+    const now=performance.now();
+    if(!force&&now-onlineLastTrack<120) return;
+    onlineLastTrack=now;
+    const payload=onlinePayload();
+    try{await onlineChannel.track(payload);onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});}catch(e){console.warn('Online track failed',e);}
 }
 
 /* Sky dome with gradient */
@@ -2552,6 +2684,7 @@ function takeDmg(n){
 }
 function gameOver(){
     if(S.mode==='gameover') return;
+    disconnectOnlineRoom().catch(()=>{});
     S.mode='gameover';boom(drone.position.clone());sndBoom(true);vib(500,1,1);showScreen('gameover');
     try{
         document.getElementById('fuel-warn-overlay').classList.remove('active','critical');
@@ -2581,7 +2714,7 @@ const altCvs=document.getElementById('alt-canvas'),altCtx=altCvs?altCvs.getConte
 const adiCvs=document.getElementById('adi-canvas'),adiCtx=adiCvs?adiCvs.getContext('2d'):null;
 const spdReadout=document.getElementById('speed-readout');
 const altReadout=document.getElementById('alt-readout');
-const ssLat=document.getElementById('ss-lat'),ssLon=document.getElementById('ss-lon'),ssFps=document.getElementById('ss-fps'),ssLink=document.getElementById('ss-link'),ssGps=document.getElementById('ss-gps'),ssMode=document.getElementById('ss-mode');
+const ssLat=document.getElementById('ss-lat'),ssLon=document.getElementById('ss-lon'),ssFps=document.getElementById('ss-fps'),ssLink=document.getElementById('ss-link'),ssGps=document.getElementById('ss-gps'),ssMode=document.getElementById('ss-mode'),ssOnline=document.getElementById('ss-online');
 let _fpsFrames=0,_fpsTime=0,_fpsVal=60;
 
 function drawHeadingTape(hdg){
@@ -2688,7 +2821,7 @@ function drawADI(pitch,roll){
 }
 const $dbStats=document.getElementById('db-stats');
 const $profileMenu=document.getElementById('profile-menu'),$profileName=document.getElementById('profile-name'),$profileStats=document.getElementById('profile-stats');
-const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$modeBrief=document.getElementById('mode-brief');
+const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$modeBrief=document.getElementById('mode-brief'),$onlineSetup=document.getElementById('online-setup');
 const $modeCards=[...document.querySelectorAll('[data-mode]')];
 
 function getModeCfg(){ return GAME_MODES[S.gameMode] || GAME_MODES.single; }
@@ -2710,6 +2843,7 @@ function setGameMode(mode, persist=true){
         card.classList.toggle('active', active);
         card.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    if($onlineSetup) $onlineSetup.classList.toggle('show', S.gameMode==='multiplayer');
     if(ssMode) ssMode.textContent = cfg.label.toUpperCase();
     if(persist) dbSetSetting('gameMode', S.gameMode).catch(()=>{});
 }
@@ -2851,7 +2985,7 @@ async function refreshProfilesUI(){
     }
     const persona = getPersonaCfg();
     const mode = getModeCfg();
-    $profileStats.innerHTML = `<b>${activeProfile.name}</b> | ${persona.rank} ${persona.badge}<br>Mode: ${mode.label} | Sorties: ${activeProfile.totalFlights||0} | Best: ${Math.round(activeProfile.bestScore||0)} pts<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m | Time: ${fmtSec(activeProfile.totalTime||0)}`;
+    $profileStats.innerHTML = `<b>${activeProfile.name}</b> | ${persona.rank} ${persona.badge}<br>Mode: ${mode.label} | Online: ${getOnlineStateLabel()}<br>Sorties: ${activeProfile.totalFlights||0} | Best: ${Math.round(activeProfile.bestScore||0)} pts<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m | Time: ${fmtSec(activeProfile.totalTime||0)}`;
 }
 async function createProfileFromInput(){
     const name = ($profileName.value||'').trim();
@@ -2897,7 +3031,7 @@ function startGame(){
     dbSetSetting('activeProfileId', activeProfileId).catch(()=>{});
     dbSetSetting('gameMode', S.gameMode).catch(()=>{});
     dbSetSetting('persona', selectedPersona).catch(()=>{});
-    if(S.gameMode==='multiplayer') notify('ONLINE LAB NEEDS REALTIME BACKEND','kill-note');
+    if(S.gameMode!=='multiplayer') disconnectOnlineRoom().catch(()=>{});
     resumeAudio();startEngine();resetState();drone.position.copy(SPAWN);prevPos.copy(drone.position);drone.rotation.set(0,0,0);droneVis.rotation.set(0,0,0);heliVis.rotation.set(0,0,0);
     WORLD.fuel = getModeCfg().fuelStart;
     applyVehicleMode();
@@ -2917,13 +3051,15 @@ function startGame(){
     periodicTimer=20+Math.random()*15;
     setTimeout(()=>radioSpeak('startup'),1500);
     notify(`${getModeCfg().label.toUpperCase()} MODE | ${getPersonaCfg().label.toUpperCase()}`,'ring-note');
+    if(S.gameMode==='multiplayer') connectOnlineRoom();
 }
 function togglePause(){
     if(S.mode==='playing'){S.mode='paused';showScreen('pause');}
-    else if(S.mode==='paused'){S.mode='playing';showScreen('playing');clock.getDelta();}
+    else if(S.mode==='paused'){S.mode='playing';showScreen('playing');clock.getDelta();trackOnlineState(true).catch(()=>{});}
 }
 function exitToMenu(){
     S.mode='menu';
+    disconnectOnlineRoom().catch(()=>{});
     showScreen('menu');
     document.getElementById('game-meta').style.display='';
 }
@@ -2943,7 +3079,7 @@ $modeCards.forEach(card=>card.addEventListener('click', async ()=>{
     setGameMode(card.dataset.mode);
     const p = await dbGetProfileById(activeProfileId);
     if(p){p.preferredMode=S.gameMode; await dbSaveProfile(p); activeProfile=p; await refreshProfilesUI();}
-    if(S.gameMode==='multiplayer') notify('ONLINE LAB: BACKEND NOT CONNECTED','kill-note');
+    if(S.gameMode==='multiplayer') setOnlineStatus(onlineConfig.url&&onlineConfig.key?'Ready. Launch Online Lab to connect.':'Offline. Add free Supabase URL/key.', onlineConfig.url&&onlineConfig.key?'good':'warn');
 }));
 $personaMenu.addEventListener('change', async ()=>{
     setPersona($personaMenu.value);
@@ -2955,6 +3091,7 @@ document.getElementById('btn-calibrate').addEventListener('click', async ()=>{
     if(ok){applySettingsToUI();await saveControlSettings();notify('GAMEPAD CALIBRATED','ring-note');}
     else notify('CONNECT GAMEPAD FIRST','kill-note');
 });
+document.getElementById('btn-online-save').addEventListener('click',()=>{saveOnlineConfig().catch(()=>setOnlineStatus('Could not save online config.', 'bad'));});
 document.getElementById('btn-save-settings').addEventListener('click', async ()=>{pullSettingsFromUI();await saveControlSettings();notify('SETTINGS SAVED','ring-note');});
 [$setDeadzone,$setExpo,$setPitchS,$setRollS,$setYawS,$setThrS,$invLX,$invLY,$invRX,$invRY].forEach(el=>el.addEventListener('input',pullSettingsFromUI));
 document.getElementById('btn-start').addEventListener('click',startGame);
@@ -2983,6 +3120,7 @@ applyVehicleMode();
 (async ()=>{
     await initDB();
     await loadControlSettings();
+    await loadOnlineConfig();
     await refreshProfilesUI();
     await refreshRunStats();
 })();
@@ -3060,6 +3198,11 @@ function updHUD(spd,dt=1/60){
         ssGps.classList.toggle('warn-sys', WORLD.gps==='2D');
     }
     if(ssMode) ssMode.textContent = getModeCfg().label.toUpperCase();
+    if(ssOnline){
+        ssOnline.textContent = onlineConnected ? String(remotePilots.size+1) : 'OFF';
+        ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected);
+        ssOnline.classList.toggle('bad-sys', S.gameMode==='multiplayer' && !onlineConfig.url);
+    }
     if($flightWarn){
         $flightWarn.textContent = WORLD.warning;
         $flightWarn.classList.toggle('show', !!WORLD.warning);
@@ -3590,7 +3733,7 @@ function animate(){
     skyDome.position.set(camera.position.x,0,camera.position.z);
 
     updEnemies(dt); updBullets(dt); updEBullets(dt); updBooms(dt); updRings(dt); updOrbs(dt);
-    updTraffic(dt); updPowerUps(dt); updTrail(dt);
+    updTraffic(dt); updPowerUps(dt); updTrail(dt); updateRemotePilots(dt); trackOnlineState().catch(()=>{});
     updParticles(dt); updRadio(dt); updSmoke(dt);
     droneCollisions();
     updEngine(curSpeed, fuelFalling ? 0 : throttle*2);
