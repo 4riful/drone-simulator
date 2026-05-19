@@ -13,6 +13,19 @@
     --danger:#ff5f56;
     --font:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
+:root[data-theme='amber']{
+    --bg:#120b02;
+    --panel:#171006;
+    --panel-2:#1b1208;
+    --line:#4b3715;
+    --text:#fff0db;
+    --muted:#b79568;
+    --dim:#8c6b3d;
+    --accent:#ffb84d;
+    --accent-2:#ffc56a;
+    --warn:#ffe08a;
+    --danger:#ff7a59;
+}
 *{box-sizing:border-box}
 html{min-height:100%;background:var(--bg)}
 body{
@@ -40,7 +53,7 @@ body::before{
 a{color:inherit;text-decoration:none}
 button,input{font:inherit}
 .home-shell{
-    width:min(1080px, calc(100% - 24px));
+    width:min(1360px, calc(100% - 24px));
     margin:0 auto;
     padding:16px 0 24px;
 }
@@ -63,6 +76,7 @@ button,input{font:inherit}
     margin-bottom:12px;
     border-bottom:1px solid rgba(49,242,143,.12);
 }
+.head-actions{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .status-line{font-size:11px;color:#8fac9b;text-transform:uppercase;letter-spacing:.18em;padding-top:8px;white-space:nowrap}
 .glyph{color:var(--accent);margin-right:8px}
 .eyebrow,.step,.about-list span,.room-panel label{
@@ -103,9 +117,19 @@ h2{font-size:clamp(15px,2vw,20px);letter-spacing:-.035em}
 .terminal-section{padding-top:12px;margin-top:12px;border-top:1px solid rgba(49,242,143,.12)}
 .section-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
 .section-head p{margin-top:6px;color:#89ad9b;line-height:1.55;font-size:12px}
+.terminal-window{
+    display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(340px,.95fr);
+}
+.terminal-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:12px 16px;align-items:start}
+.terminal-head,.terminal-feed,.launch-section,.about-section{grid-column:1 / -1}
+.mode-section{grid-column:1 / 2}
+.aircraft-section{grid-column:2 / 3}
+.launch-section{grid-column:2 / 3}
+.about-section{grid-column:1 / 2}
 .mode-grid,.aircraft-grid{display:grid;gap:8px}
 .mode-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-.aircraft-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.aircraft-grid{grid-template-columns:1fr}
 .mode-card{
     width:100%;
     min-height:64px;
@@ -163,15 +187,30 @@ h2{font-size:clamp(15px,2vw,20px);letter-spacing:-.035em}
 .about-list{display:grid;gap:8px}
 .about-list div{border:1px solid var(--line);border-radius:8px;padding:10px;background:rgba(255,255,255,.024)}
 .about-list b{display:block;margin-top:5px;font-size:11px;line-height:1.45;word-break:break-word}
+.theme-btn{
+    border:1px solid rgba(49,242,143,.34);
+    color:var(--accent);
+    background:rgba(49,242,143,.06);
+    border-radius:8px;
+    padding:8px 11px;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+}
+.theme-btn:hover{background:rgba(49,242,143,.13)}
 .about-list span .glyph,
 .mode-card b .glyph,
 .room-panel label .glyph,
 .launch-btn .glyph{margin-right:8px}
 @media (max-width:900px){
-    .home-shell{width:min(100% - 16px,760px);padding:10px 0 18px}
+    .home-shell{width:min(100% - 12px,1080px);padding:8px 0 16px}
     .terminal-head{flex-direction:column;gap:8px}
     .status-line{padding-top:0}
-    .mode-grid,.aircraft-grid{grid-template-columns:1fr}
+    .terminal-window,.terminal-body{grid-template-columns:1fr}
+    .mode-section,.aircraft-section,.launch-section,.about-section{grid-column:auto}
+    .mode-grid,.aircraft-grid{grid-template-columns:1fr 1fr}
     .room-row{grid-template-columns:1fr}
 }
 @media (max-width:620px){
@@ -179,5 +218,6 @@ h2{font-size:clamp(15px,2vw,20px);letter-spacing:-.035em}
     h1{font-size:32px}
     .terminal-feed{font-size:12px;min-height:88px}
     .mode-card{min-height:auto}
+    .mode-grid,.aircraft-grid{grid-template-columns:1fr}
     .small-btn{width:100%}
 }

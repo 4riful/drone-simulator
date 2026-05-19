@@ -43,6 +43,13 @@ const $roomPanel = document.getElementById('room-panel');
 const $roomCode = document.getElementById('room-code');
 const $roomStatus = document.getElementById('room-status');
 const $terminalFeed = document.getElementById('terminal-feed');
+const $themeBtn = document.getElementById('btn-theme');
+
+const THEMES = [
+  { name: 'Green', key: 'green' },
+  { name: 'Amber', key: 'amber' }
+];
+let themeIndex = 0;
 
 function normalizeRoom(room) {
   return String(room || '').toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
@@ -68,6 +75,17 @@ function updateSummary() {
   $aircraftBrief.textContent = AIRCRAFT[selectedAircraft];
   $launchSummary.textContent = `${selectedMode.replace(/flight$/, ' flight').toUpperCase()} | ${AIRCRAFT_LABELS[selectedAircraft]}`;
   $roomPanel.hidden = selectedMode !== 'multiplayer';
+}
+
+function applyTheme(index) {
+  themeIndex = index % THEMES.length;
+  const theme = THEMES[themeIndex];
+  document.documentElement.dataset.theme = theme.key;
+  if ($themeBtn) {
+    $themeBtn.textContent = `Theme: ${theme.name}`;
+    $themeBtn.setAttribute('aria-pressed', theme.key === 'amber' ? 'true' : 'false');
+  }
+  localStorage.setItem('drone.homeTheme', theme.key);
 }
 
 function pushTerminal(line) {
@@ -180,6 +198,11 @@ document.getElementById('btn-launch').addEventListener('click', () => {
   location.href = gameUrl().toString();
 });
 
+$themeBtn.addEventListener('click', () => {
+  applyTheme(themeIndex + 1);
+  pushTerminal(`> theme set to ${THEMES[themeIndex].name.toLowerCase()}`);
+});
+
 let terminalIdx = 0;
 setInterval(() => {
   pushTerminal(TERMINAL_LINES[terminalIdx % TERMINAL_LINES.length]);
@@ -196,5 +219,7 @@ if (bootParams.get('aircraft') && AIRCRAFT[bootParams.get('aircraft')]) {
   setActive('[data-aircraft]', 'aircraft', selectedAircraft);
 }
 if (bootParams.get('room')) $roomCode.value = normalizeRoom(bootParams.get('room'));
+
+applyTheme(['green', 'amber'].indexOf(localStorage.getItem('drone.homeTheme')) >= 0 ? ['green', 'amber'].indexOf(localStorage.getItem('drone.homeTheme')) : 0);
 
 updateSummary();
