@@ -1,0 +1,15 @@
+{
+  "name": "drone-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based drone simulator game with assisted flight physics, telemetry, missions, and combat systems.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "node check-module.mjs"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}

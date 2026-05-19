@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PREDATOR OPS: Iran Theater</title>
+    <link rel="stylesheet" href="./src/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="menu-screen" class="screen">
+<div class="m">
+    <div class="m-head">
+        <div class="m-tag">CENTCOM Drone Operations</div>
+        <h1>Predator Ops</h1>
+        <h2>Iran Theater</h2>
+    </div>
+
+    <button class="m-start" id="btn-start">Launch Mission</button>
+
+    <div class="m-section">
+        <div class="m-label">Aircraft &amp; Operator</div>
+        <div class="m-body">
+            <div class="m-row">
+                <label>Aircraft</label>
+                <select id="vehicle-menu" class="m-sel"><option value="drone">MQ-9 Reaper</option><option value="helicopter">MQ-8B Fire Scout</option></select>
+            </div>
+            <div class="m-row">
+                <label>Operator</label>
+                <select id="profile-menu" class="m-sel"></select>
+            </div>
+            <div class="m-row">
+                <input id="profile-name" class="m-input" type="text" maxlength="24" placeholder="Enter callsign...">
+                <button class="btn btn-sm" id="btn-create-profile">Create</button>
+            </div>
+            <div id="profile-stats">No operator assigned.</div>
+        </div>
+    </div>
+
+    <details class="m-section">
+        <summary>Controls</summary>
+        <div class="m-body">
+            <div class="m-keys">
+                <div><span>W S</span> Pitch</div>
+                <div><span>A D</span> Roll</div>
+                <div><span>Q E</span> Yaw</div>
+                <div><span>Space / Shift</span> Up / Down</div>
+                <div><span>F / Click</span> Fire</div>
+                <div><span>Tab</span> Boost</div>
+                <div><span>T</span> Lock Target</div>
+                <div><span>L</span> Follow</div>
+                <div><span>G</span> Headlight</div>
+                <div><span>Esc</span> Pause</div>
+            </div>
+            <div class="m-keys-note">Gamepad: Mode 2 RC &mdash; L-Stick throttle+yaw, R-Stick pitch+roll, D-Pad targeting. Configure in Settings.</div>
+        </div>
+    </details>
+
+    <details class="m-section">
+        <summary>Mission Records</summary>
+        <div class="m-body">
+            <div id="db-stats">Loading mission records...</div>
+        </div>
+    </details>
+
+    <div class="m-btns">
+        <button class="btn" id="btn-settings">Settings</button>
+        <button class="btn btn-danger" id="btn-exit-app">Exit</button>
+    </div>
+</div>
+</div>
+<div id="settings-screen" class="screen hidden">
+    <h1>Mission Config</h1>
+    <div class="settings-panel">
+        <div class="field-row"><label>Gamepad Deadzone</label><input id="set-deadzone" type="range" min="0" max="0.25" step="0.01"><span class="tiny" id="set-deadzone-v">0.08</span></div>
+        <div class="field-row"><label>Stick Expo</label><input id="set-expo" type="range" min="0" max="0.9" step="0.01"><span class="tiny" id="set-expo-v">0.35</span></div>
+        <div class="field-row"><label>Pitch Sensitivity</label><input id="set-pitch-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-pitch-s-v">1.00</span></div>
+        <div class="field-row"><label>Roll Sensitivity</label><input id="set-roll-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-roll-s-v">1.00</span></div>
+        <div class="field-row"><label>Yaw Sensitivity</label><input id="set-yaw-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-yaw-s-v">1.00</span></div>
+        <div class="field-row"><label>Throttle Sensitivity</label><input id="set-thr-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-thr-s-v">1.00</span></div>
+        <div class="field-row"><label>Aircraft Type</label><select id="set-vehicle" class="menu-select"><option value="drone">MQ-9 Reaper</option><option value="helicopter">MQ-8B Fire Scout</option></select></div>
+        <div class="check-grid">
+            <label><input id="inv-lx" type="checkbox"> Invert Left X (Yaw)</label>
+            <label><input id="inv-ly" type="checkbox"> Invert Left Y (Throttle)</label>
+            <label><input id="inv-rx" type="checkbox"> Invert Right X (Roll)</label>
+            <label><input id="inv-ry" type="checkbox"> Invert Right Y (Pitch)</label>
+        </div>
+        <div style="margin-top:10px;color:#97adbb">Center calibration offsets: <span id="calib-info">not calibrated</span></div>
+        <div id="gp-live">
+            <div id="gp-live-status">No gamepad connected</div>
+            <div class="gp-row"><label>Left X</label><div class="gp-bar"><div id="gp-ax-0" class="gp-fill"></div></div><div id="gp-axv-0" class="gp-val">0.000</div></div>
+            <div class="gp-row"><label>Left Y</label><div class="gp-bar"><div id="gp-ax-1" class="gp-fill"></div></div><div id="gp-axv-1" class="gp-val">0.000</div></div>
+            <div class="gp-row"><label>Right X</label><div class="gp-bar"><div id="gp-ax-2" class="gp-fill"></div></div><div id="gp-axv-2" class="gp-val">0.000</div></div>
+            <div class="gp-row"><label>Right Y</label><div class="gp-bar"><div id="gp-ax-3" class="gp-fill"></div></div><div id="gp-axv-3" class="gp-val">0.000</div></div>
+            <div class="gp-row"><label>LT</label><div class="gp-bar"><div id="gp-ax-4" class="gp-fill"></div></div><div id="gp-axv-4" class="gp-val">0.000</div></div>
+            <div class="gp-row"><label>RT</label><div class="gp-bar"><div id="gp-ax-5" class="gp-fill"></div></div><div id="gp-axv-5" class="gp-val">0.000</div></div>
+            <div id="gp-buttons">
+                <span id="gp-btn-0" class="gp-chip">A</span><span id="gp-btn-1" class="gp-chip">B</span><span id="gp-btn-2" class="gp-chip">X</span><span id="gp-btn-3" class="gp-chip">Y</span>
+                <span id="gp-btn-4" class="gp-chip">LB</span><span id="gp-btn-5" class="gp-chip">RB</span><span id="gp-btn-6" class="gp-chip">LT</span><span id="gp-btn-7" class="gp-chip">RT</span>
+                <span id="gp-btn-8" class="gp-chip">Back</span><span id="gp-btn-9" class="gp-chip">Start</span><span id="gp-btn-10" class="gp-chip">L3</span><span id="gp-btn-11" class="gp-chip">R3</span>
+            </div>
+        </div>
+    </div>
+    <button class="btn" id="btn-calibrate">Calibrate Gamepad Center</button>
+    <button class="btn" id="btn-save-settings">Save Settings</button>
+    <button class="btn btn-danger" id="btn-back-menu">Back</button>
+</div>
+<div id="pause-screen" class="screen hidden">
+    <div class="pause-card">
+        <div class="pause-icon">&#9208;</div>
+        <h1>Paused</h1>
+        <div class="pause-sub">Mission Suspended</div>
+
+        <div class="pause-stats">
+            <div class="pause-stat">
+                <div class="pause-stat-val" id="ps-score">0</div>
+                <div class="pause-stat-label">Score</div>
+            </div>
+            <div class="pause-stat">
+                <div class="pause-stat-val" id="ps-kills">0</div>
+                <div class="pause-stat-label">Hostiles KIA</div>
+            </div>
+            <div class="pause-stat">
+                <div class="pause-stat-val" id="ps-dist">0m</div>
+                <div class="pause-stat-label">Distance</div>
+            </div>
+            <div class="pause-stat">
+                <div class="pause-stat-val" id="ps-rings">0</div>
+                <div class="pause-stat-label">Waypoints</div>
+            </div>
+            <div class="pause-stat wide">
+                <div class="pause-stat-val" id="ps-fuel">100%</div>
+                <div class="pause-stat-label">Fuel Remaining</div>
+            </div>
+        </div>
+
+        <div class="pause-divider"></div>
+
+        <div class="pause-btns">
+            <button class="btn btn-primary" id="btn-resume">Resume Mission</button>
+            <button class="btn" id="btn-pause-settings">Mission Config</button>
+            <button class="btn btn-danger" id="btn-restart-p">Abort &amp; Redeploy</button>
+            <button class="btn btn-danger" id="btn-exit-menu">Return to Base</button>
+        </div>
+    </div>
+</div>
+<div id="gameover-screen" class="screen hidden">
+    <h1>Mission Failed</h1>
+    <div class="go-stats">Score: <span id="go-score">0</span><br>Distance: <span id="go-dist">0</span> m<br>Hostiles Neutralized: <span id="go-kills">0</span><br>Checkpoints: <span id="go-rings">0</span></div>
+    <button class="btn" id="btn-restart-go">Redeploy</button>
+</div>
+<div id="hud" class="hidden">
+    <div id="cam-border"></div>
+    <div id="hud-tl">
+        <p><span class="ico">&#9758;</span> <span class="val" id="h-pilot">VIPER-1</span></p>
+        <p><span class="ico">&#9733;</span> SCR <span class="val" id="h-score">0</span></p>
+        <p><span class="ico">&#8982;</span> RNG <span class="val" id="h-dist">0</span>m</p>
+        <p><span class="ico">&#10006;</span> KIA <span class="vk" id="h-kills">0</span></p>
+        <p><span class="ico">&#9670;</span> WPT <span class="vr" id="h-rings">0</span></p>
+    </div>
+    <div id="hud-tr">
+        <div><span class="ico">&#9981;</span> FUEL <span class="val" id="h-fuel">100%</span></div>
+        <div><span class="ico">&#9729;</span> WIND <span class="val" id="h-wind">0.0</span></div>
+        <div><span class="ico">&#9889;</span> BATT <span class="val" id="h-batt">25.2V</span></div>
+        <div><span class="ico">&#8981;</span> SIG <span class="val" id="h-signal">100%</span></div>
+        <div><span class="ico">&#9673;</span> AIR <span class="val" id="h-air">100%</span></div>
+        <div><span class="ico">&#9201;</span> TIME <span class="val" id="h-time">00:00</span></div>
+    </div>
+    <div id="heading-tape"><canvas id="hdg-canvas" width="300" height="26"></canvas></div>
+    <div id="speed-tape"><canvas id="spd-canvas" width="54" height="180"></canvas><div id="speed-readout">0</div></div>
+    <div id="alt-tape"><canvas id="alt-canvas" width="54" height="180"></canvas><div id="alt-readout">0</div></div>
+    <div id="adi-wrap"><canvas id="adi-canvas" width="80" height="80"></canvas></div>
+    <div id="crosshair"><div class="dot"></div><div class="ring"></div><div class="tick tick-t"></div><div class="tick tick-b"></div><div class="tick tick-l"></div><div class="tick tick-r"></div></div>
+    <canvas id="minimap" width="140" height="140"></canvas>
+    <div id="hp-wrap"><div id="hp-bar"></div></div><div id="hp-label">HULL</div>
+    <div id="boost-wrap"><div id="boost-bar"></div></div><div id="boost-label">AFT</div>
+    <div id="alt-ind">ALT 30m</div>
+    <div id="speed-ind">0 KTS</div>
+    <div id="compass">N</div>
+    <div id="objective"></div>
+    <div id="target-lock"></div>
+    <div id="flight-warn"></div>
+    <div id="threats"></div>
+    <div id="pu-ind"></div>
+    <div id="radio-panel"></div>
+    <div id="status-strip">
+        <span>PREDATOR OPS</span><span class="sep">|</span>
+        <span>FLIR <span class="val">ON</span></span><span class="sep">|</span>
+        <span>WPN <span class="val">HOT</span></span><span class="sep">|</span>
+        <span>LINK <span class="val" id="ss-link">GOOD</span></span><span class="sep">|</span>
+        <span>GPS <span class="val" id="ss-gps">3D</span></span><span class="sep">|</span>
+        <span>LAT <span class="val" id="ss-lat">--</span></span><span class="sep">|</span>
+        <span>LON <span class="val" id="ss-lon">--</span></span><span class="sep">|</span>
+        <span id="ss-fps" class="val"></span>
+    </div>
+</div>
+<div id="dmg-flash"></div>
+<div id="boost-lines"></div>
+<div id="kill-feed"></div>
+<div id="low-hp-warn"></div>
+<div id="fuel-warn-overlay"></div>
+<div id="fuel-countdown"></div>
+<div id="fuel-warn-text"></div>
+<div id="game-meta"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
