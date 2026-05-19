@@ -36,9 +36,8 @@ let selectedAircraft = 'drone';
 let supabaseModulePromise = null;
 let lastRoomCheck = { room: '', activePilots: 0, ok: false };
 
-const $modeBrief = document.getElementById('mode-brief');
-const $aircraftBrief = document.getElementById('aircraft-brief');
-const $launchSummary = document.getElementById('launch-summary');
+const $brief = document.getElementById('brief');
+const $launchNote = document.getElementById('launch-note');
 const $roomPanel = document.getElementById('room-panel');
 const $roomCode = document.getElementById('room-code');
 const $roomStatus = document.getElementById('room-status');
@@ -64,10 +63,9 @@ function gameUrl() {
 }
 
 function updateSummary() {
-  $modeBrief.textContent = MODES[selectedMode];
-  $aircraftBrief.textContent = AIRCRAFT[selectedAircraft];
-  $launchSummary.textContent = `${selectedMode.replace(/flight$/, ' flight').toUpperCase()} | ${AIRCRAFT_LABELS[selectedAircraft]}`;
-  $roomPanel.hidden = selectedMode !== 'multiplayer';
+  $brief.textContent = MODES[selectedMode];
+  $launchNote.textContent = `${selectedMode.replace(/flight$/, ' flight').toUpperCase()} | ${AIRCRAFT_LABELS[selectedAircraft]}`;
+  $roomPanel.classList.toggle('hidden', selectedMode !== 'multiplayer');
 }
 
 function pushTerminal(line) {
@@ -106,8 +104,8 @@ document.getElementById('aircraft-grid').addEventListener('click', (event) => {
 document.getElementById('btn-room-code').addEventListener('click', () => {
   $roomCode.value = makeRoomCode();
   lastRoomCheck = { room: $roomCode.value, activePilots: 0, ok: true };
-  $roomStatus.textContent = `Battle room ${$roomCode.value} created. Copy the invite for player two, then launch.`;
-  pushTerminal(`> created battle room ${$roomCode.value}`);
+  $roomStatus.textContent = `Room ${$roomCode.value} created. Share the code with player two.`;
+  pushTerminal(`> created room ${$roomCode.value}`);
 });
 
 document.getElementById('btn-join-room').addEventListener('click', async () => {
@@ -116,13 +114,13 @@ document.getElementById('btn-join-room').addEventListener('click', async () => {
   updateSummary();
   const room = normalizeRoom($roomCode.value);
   if (!room) {
-    $roomStatus.textContent = 'Enter the battle room code from player one, or create a new battle.';
-    pushTerminal('> join blocked: missing battle code');
+    $roomStatus.textContent = 'Enter a room code or press Create.';
+    pushTerminal('> join blocked: missing code');
     return;
   }
   $roomCode.value = room;
-  $roomStatus.textContent = `Checking battle room ${room}...`;
-  pushTerminal(`> checking battle room ${room}`);
+  $roomStatus.textContent = `Checking room ${room}...`;
+  pushTerminal(`> checking room ${room}`);
   try {
     if (!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
     const { createClient } = await supabaseModulePromise;
@@ -145,13 +143,13 @@ document.getElementById('btn-join-room').addEventListener('click', async () => {
     await channel.unsubscribe();
     lastRoomCheck = { room, activePilots, ok: true };
     $roomStatus.textContent = activePilots > 0
-      ? `Battle room ${room} active - ${activePilots} pilot(s) online. Launch to fight.`
-      : `Battle room ${room} is open. Launch now and wait for player two.`;
-    pushTerminal(activePilots > 0 ? `> battle active: ${activePilots} pilot(s), launch to fight` : '> battle room open: waiting for player two');
+      ? `Room active - ${activePilots} pilot(s) online. Launch to join.`
+      : `Room open. Launch and wait for player two.`;
+    pushTerminal(activePilots > 0 ? `> room active: ${activePilots} pilot(s)` : '> room open: waiting for player');
   } catch (_) {
     lastRoomCheck = { room, activePilots: 0, ok: false };
-    $roomStatus.textContent = 'Battle room check failed. Recheck the code, network, or Supabase realtime access.';
-    pushTerminal('> battle room check failed');
+    $roomStatus.textContent = 'Room check failed. Verify code and connection.';
+    pushTerminal('> room check failed');
   }
 });
 
@@ -160,7 +158,7 @@ document.getElementById('btn-copy-room').addEventListener('click', async () => {
   const url = gameUrl().toString();
   try {
     await navigator.clipboard.writeText(url);
-    $roomStatus.textContent = `Invite copied for ${normalizeRoom($roomCode.value)}. Player two opens it, selects Launch, and joins the battle.`;
+    $roomStatus.textContent = `Invite copied. Player two opens the link and launches.`;
     pushTerminal('> invite link copied');
   } catch (_) {
     $roomStatus.textContent = url;
@@ -173,10 +171,10 @@ document.getElementById('btn-launch').addEventListener('click', () => {
   if (selectedMode === 'multiplayer') {
     const room = normalizeRoom($roomCode.value);
     if (lastRoomCheck.room !== room || !lastRoomCheck.ok) {
-      $roomStatus.textContent = `Launching battle room ${room}. Remote pilots appear as radar contacts after they enter.`;
+      $roomStatus.textContent = `Launching room ${room}. Remote pilots appear as radar contacts.`;
     }
   }
-  pushTerminal('> launching gameplay page');
+  pushTerminal('> launching gameplay');
   location.href = gameUrl().toString();
 });
 

@@ -9,102 +9,74 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <main class="home-shell">
-        <section class="terminal-window" aria-labelledby="hero-title">
-            <div class="terminal-bar"><span></span><span></span><span></span><b>launcher@drone-sim:~/battle</b></div>
-            <div class="terminal-body">
-                <div class="terminal-head">
-                    <div>
-                        <div class="eyebrow">&#9611; Drone Simulator</div>
-                        <h1 id="hero-title">Battle Launcher</h1>
-                    </div>
-                    <div class="head-actions">
-                        <div class="status-line">Online Battle / 2 Players</div>
+    <div class="shell">
+        <div class="topbar">
+            <h1><span class="accent">DRONE</span> SIMULATOR</h1>
+            <div class="status">Battle Launcher v3.2</div>
+        </div>
+
+        <div class="main">
+            <div class="col-left">
+                <div>
+                    <div class="label">Game Mode</div>
+                    <div class="mode-row" id="mode-grid">
+                        <button class="mode-pill active" type="button" data-mode="single">Single<span>Solo sortie</span></button>
+                        <button class="mode-pill" type="button" data-mode="training">Training<span>No pressure</span></button>
+                        <button class="mode-pill" type="button" data-mode="mission">Mission<span>High score</span></button>
+                        <button class="mode-pill" type="button" data-mode="freeflight">Free Flight<span>Explore</span></button>
+                        <button class="mode-pill" type="button" data-mode="multiplayer">Online Battle<span>2-player</span></button>
                     </div>
                 </div>
 
-                <div class="terminal-feed" id="terminal-feed">
-                    <p>&gt; battle terminal online</p>
-                    <p>&gt; choose solo or online duel</p>
-                    <p>&gt; launch package standing by</p>
-                </div>
-
-                <div class="terminal-section mode-section">
-                    <div class="section-head">
-                        <span class="step">01</span>
-                        <div>
-                            <h2>Select Mode</h2>
-                            <p id="mode-brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</p>
-                        </div>
-                    </div>
-                    <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
-                        <button class="mode-card active" type="button" data-mode="single" aria-pressed="true"><b>&#9654; Single</b><span>Balanced combat sortie.</span></button>
-                        <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>&#9881; Training</b><span>No combat pressure.</span></button>
-                        <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>&#9876; Mission</b><span>Higher pressure scoring.</span></button>
-                        <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><b>&#9992; Free Flight</b><span>Explore and practice.</span></button>
-                        <button class="mode-card" type="button" data-mode="multiplayer" aria-pressed="false"><b>&#9776; Online Battle</b><span>Two-player battle room.</span></button>
-                    </div>
-                    <div class="room-panel" id="room-panel" hidden>
-                        <label for="room-code">&#128737; Battle Room Code</label>
-                        <div class="room-row">
-                            <input id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
-                            <button class="small-btn" id="btn-room-code" type="button">&#10133; Create Battle</button>
-                            <button class="small-btn" id="btn-join-room" type="button">&#10145; Join Battle</button>
-                            <button class="small-btn" id="btn-copy-room" type="button">&#128203; Copy Invite</button>
-                        </div>
-                        <p id="room-status">Create a battle room, or paste a code from another player and join.</p>
+                <div>
+                    <div class="label">Aircraft</div>
+                    <div class="aircraft-row" id="aircraft-grid">
+                        <button class="aircraft-pill active" type="button" data-aircraft="drone">MQ-9 Reaper</button>
+                        <button class="aircraft-pill" type="button" data-aircraft="helicopter">MQ-8B Fire Scout</button>
                     </div>
                 </div>
 
-                <div class="terminal-section aircraft-section">
-                    <div class="section-head">
-                        <span class="step">02</span>
-                        <div>
-                        <h2>Select Aircraft</h2>
-                            <p id="aircraft-brief">MQ-9 Reaper: fixed-wing drone feel with higher speed and longer mission profile.</p>
-                        </div>
-                    </div>
-                    <div class="aircraft-grid" id="aircraft-grid" role="radiogroup" aria-label="Aircraft">
-                        <button class="mode-card aircraft active" type="button" data-aircraft="drone" aria-pressed="true">
-                            <b>&#128640; MQ-9 Reaper</b>
-                            <span>Fast ISR/strike drone profile.</span>
-                        </button>
-                        <button class="mode-card aircraft" type="button" data-aircraft="helicopter" aria-pressed="false">
-                            <b>&#128747; MQ-8B Fire Scout</b>
-                            <span>Rotorcraft handling and hover practice.</span>
-                        </button>
+                <div class="brief" id="brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</div>
+
+                <div class="terminal">
+                    <div class="terminal-bar"><i></i><i></i><i></i> battle terminal</div>
+                    <div class="terminal-feed" id="terminal-feed">
+                        <p>&gt; systems online</p>
+                        <p>&gt; select mode and aircraft</p>
+                        <p>&gt; ready to launch</p>
                     </div>
                 </div>
 
-                <div class="terminal-section launch-section">
-                    <div class="section-head">
-                        <span class="step">03</span>
-                        <div>
-                            <h2>Launch Simulator</h2>
-                            <p id="launch-summary">Single mode | MQ-9 Reaper</p>
-                        </div>
-                    </div>
-                    <button class="launch-btn" id="btn-launch" type="button">&#9654; Launch Simulator</button>
-                    <p class="launch-note">Online Battle launches the same room for both pilots. Remote pilots appear as radar contacts in-game.</p>
-                </div>
-
-                <div class="terminal-section about-section">
-                    <div class="section-head">
-                        <span class="step">04</span>
-                        <div>
-                            <h2>About This Build</h2>
-                            <p>Separate static launcher, separate gameplay page, and deployable GitHub Pages build.</p>
-                        </div>
-                    </div>
-                    <div class="about-list">
-                        <div><span>&#128279; Playable URL</span><b>4riful.github.io/drone-simulator</b></div>
-                        <div><span>&#128187; GitHub</span><b>github.com/4riful/drone-simulator</b></div>
-                        <div><span>&#9881; Tech</span><b>Three.js, WebGL, IndexedDB, Supabase Presence</b></div>
-                    </div>
+                <div class="launch-area">
+                    <button class="launch-btn" id="btn-launch" type="button">LAUNCH SIMULATOR</button>
+                    <div class="launch-note" id="launch-note">Single mode | MQ-9 Reaper</div>
                 </div>
             </div>
-        </section>
-    </main>
+
+            <div class="col-right">
+                <div class="room-panel hidden" id="room-panel">
+                    <div class="label">Battle Room</div>
+                    <div class="room-input-row">
+                        <input class="room-input" id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
+                    </div>
+                    <div class="room-input-row" style="margin-top:4px">
+                        <button class="room-btn" id="btn-room-code" type="button">Create</button>
+                        <button class="room-btn" id="btn-join-room" type="button">Join</button>
+                        <button class="room-btn" id="btn-copy-room" type="button">Copy Link</button>
+                    </div>
+                    <div class="room-status" id="room-status">Create a room or enter a code to join.</div>
+                </div>
+
+                <div class="about-badges">
+                    <div class="about-badge"><b>Play</b> 4riful.github.io/drone-simulator</div>
+                    <div class="about-badge"><b>Code</b> github.com/4riful/drone-simulator</div>
+                    <div class="about-badge"><b>Stack</b> Three.js WebGL Supabase</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">Browser-based flight simulator &mdash; separate launcher and gameplay pages</div>
+    </div>
     <script type="module" src="./src/home.js"></script>
 </body>
 </html>
