@@ -670,7 +670,15 @@ async function createOnlineRoom(){
 async function joinOnlineRoom(){
     const room = await saveOnlineRoom();
     setGameMode('multiplayer');
-    notify(`JOIN ROOM ${room}`,'ring-note');
+    setOnlineStatus(`Checking room ${room}...`, 'warn');
+    try{
+        const activePilots = await checkOnlineRoomPresence(room);
+        setOnlineStatus(activePilots>0 ? `Active room found: ${activePilots} pilot(s) online` : `Room ${room} reachable - waiting for pilot`, activePilots>0?'good':'warn');
+        notify(activePilots>0 ? `JOIN ROOM ${room}` : `ROOM ${room} READY`,'ring-note');
+    }catch(_){
+        setOnlineStatus('Room check failed. Recheck network or code.', 'bad');
+        notify('ROOM CHECK FAILED','kill-note');
+    }
 }
 async function copyOnlineInvite(){
     const room = await saveOnlineRoom();
@@ -688,6 +696,34 @@ function getOnlineStateLabel(){
     if(onlineConnected) return `Online ${remotePilots.size+1} pilot(s)`;
     return onlineConfig.room ? `Ready. Room ${onlineConfig.room}` : 'Ready. Create or join a room.';
 }
+async function checkOnlineRoomPresence(room){
+    const checkedRoom = normalizeRoomId(room);
+    if(!checkedRoom) throw new Error('missing room');
+    if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
+    const { createClient } = await supabaseModulePromise;
+    const client = supabaseClient || createClient(onlineConfig.url, onlineConfig.key, { auth:{ persistSession:false, autoRefreshToken:false } });
+    const channel = client.channel(`drone-simulator:${checkedRoom}`);
+    let activePilots = 0;
+    channel.on('presence',{event:'sync'},()=>{
+        activePilots = Object.values(channel.presenceState()).reduce((n,rows)=>n+rows.length,0);
+    });
+    await new Promise((resolve,reject)=>{
+        const timer=setTimeout(resolve,1800);
+        channel.subscribe(status=>{
+            if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
+                clearTimeout(timer);reject(new Error(status));
+            }
+        });
+    });
+    try{await channel.unsubscribe();}catch(_){}
+    return activePilots;
+}
+function updateOnlineStatus(){
+    if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), 'good'); return; }
+    const remoteCount = remotePilots.size;
+    const txt = remoteCount ? `Online ${remoteCount+1} pilot(s) - ${remoteCount} remote visible` : `Online 1 pilot - waiting for room ${onlineConfig.room}`;
+    setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
+}
 function makeRemoteDrone(){
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.4,0.45,1.25), remoteDroneMat);
@@ -703,7 +739,7 @@ function ensureRemotePilot(id,state){
 }
 function removeRemotePilot(id){
     const rp=remotePilots.get(id);if(!rp)return;
-    scene.remove(rp.mesh);rp.mesh.userData.label?.remove();remotePilots.delete(id);setOnlineStatus(onlineConnected?`Online ${remotePilots.size+1} pilot(s)`:'Offline',onlineConnected?'good':'warn');
+    scene.remove(rp.mesh);rp.mesh.userData.label?.remove();remotePilots.delete(id);updateOnlineStatus();
 }
 function cleanupRemotePilots(){
     for(const id of [...remotePilots.keys()]) removeRemotePilot(id);
@@ -746,14 +782,14 @@ async function connectOnlineRoom(){
                 if(latest?.p&&latest?.q){seen.add(id);ensureRemotePilot(id,latest);}
             }
             for(const id of remotePilots.keys()) if(!seen.has(id)) removeRemotePilot(id);
-            setOnlineStatus(`Online ${remotePilots.size+1} pilot(s)`, 'good');
+            updateOnlineStatus();
         });
         onlineChannel.on('broadcast',{event:'state'},payload=>{
-            const s=payload.payload;if(!s||s.id===onlineClientId||!s.p||!s.q)return;ensureRemotePilot(s.id,s);
+            const s=payload.payload;if(!s||s.id===onlineClientId||!s.p||!s.q)return;ensureRemotePilot(s.id,s);updateOnlineStatus();
         });
         onlineChannel.subscribe(async status=>{
             if(status==='SUBSCRIBED'){
-                onlineConnected=true;setOnlineStatus(`Online ${remotePilots.size+1} pilot(s)`, 'good');notify(`ONLINE ROOM ${room}`,'ring-note');await trackOnlineState(true);
+                onlineConnected=true;updateOnlineStatus();notify(`ONLINE ROOM ${room}`,'ring-note');await trackOnlineState(true);
             }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
                 onlineConnected=false;setOnlineStatus(`Online ${status.toLowerCase()}`, 'bad');
             }
@@ -3112,10 +3148,8 @@ function togglePause(){
     else if(S.mode==='paused'){S.mode='playing';showScreen('playing');clock.getDelta();trackOnlineState(true).catch(()=>{});}
 }
 function exitToMenu(){
-    S.mode='menu';
     disconnectOnlineRoom().catch(()=>{});
-    showScreen('menu');
-    document.getElementById('game-meta').style.display='';
+    location.href = './index.html';
 }
 document.getElementById('btn-settings').addEventListener('click',()=>{applySettingsToUI();showScreen('settings');});
 document.getElementById('btn-back-menu').addEventListener('click',()=>showScreen('menu'));
@@ -3321,6 +3355,7 @@ function updMinimap(){
     mmC.fillStyle='#40b8e0';for(const r of rings){if(r.userData.got)continue;const dx=(r.position.x-drone.position.x)*sc,dz2=(r.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#60a0d0';for(const o of orbs){if(o.userData.got)continue;const dx=(o.position.x-drone.position.x)*sc,dz2=(o.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#e05540';for(const e of enemies){const dx=(e.position.x-drone.position.x)*sc,dz2=(e.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,3,0,Math.PI*2);mmC.fill();}
+    mmC.fillStyle='#49d8ff';mmC.strokeStyle='rgba(73,216,255,.65)';mmC.lineWidth=1.5;for(const rp of remotePilots.values()){if(!rp.mesh.visible)continue;const dx=(rp.mesh.position.x-drone.position.x)*sc,dz2=(rp.mesh.position.z-drone.position.z)*sc;if(Math.abs(dx)>74||Math.abs(dz2)>74)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,4,0,Math.PI*2);mmC.fill();mmC.beginPath();mmC.arc(cx+dx,cy+dz2,7,0,Math.PI*2);mmC.stroke();}
     mmC.fillStyle='#60c0e8';mmC.beginPath();mmC.arc(cx,cy,3,0,Math.PI*2);mmC.fill();
     const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(drone.quaternion);mmC.strokeStyle='#60c0e8';mmC.lineWidth=1.5;mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(cx+fwd.x*12,cy+fwd.z*12);mmC.stroke();
     mmC.strokeStyle='rgba(60,90,120,.3)';mmC.lineWidth=1;mmC.strokeRect(0,0,MM,MM);

@@ -1,5 +1,7 @@
 # Drone Simulator
 
+![Drone Simulator logo](./logo.png)
+
 Browser-playable drone simulator prototype built with Three.js, a terminal-style cockpit UI, local pilot profiles, multiple game modes, and a roadmap toward a more physically correct flight model.
 
 **Play now:** https://4riful.github.io/drone-simulator/
@@ -10,7 +12,7 @@ This project is playable today, but it is still a simulator-game prototype. The 
 
 ## Current Features
 
-- Playable directly from GitHub Pages with a dedicated landing page and gameplay page.
+- Playable directly from GitHub Pages with a dedicated terminal-themed landing page and gameplay page.
 - Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
 - Game modes: Single, Training, Mission, Free Flight, and Online Lab.
@@ -30,11 +32,12 @@ The app is already configured with the project's public Supabase key.
 
 1. Open the simulator and choose **Online Lab**.
 2. Click **Create Room** to generate a code such as `DRN-482K`.
-3. Click **Copy Link** and share it with another player.
-4. The other player opens the invite URL, selects **Online Lab**, and clicks **Join Room**.
-5. Both players launch the mission and see synced remote ghost drones.
+3. Click **Check** to verify that Supabase Realtime is reachable for that code and to see whether another pilot is already present.
+4. Click **Copy Link** and share it with another player.
+5. The other player opens the invite URL or enters the same room code, then launches Online Lab.
+6. Both players see synced remote ghost drones and minimap markers.
 
-Current Online Lab syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote ghost drones. Combat synchronization and authoritative validation should come later.
+Current Online Lab syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote ghost drones. Combat synchronization and authoritative validation should come later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
 
 ## Controls
 

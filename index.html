@@ -12,14 +12,24 @@
     <main class="home-shell">
         <section class="hero" aria-labelledby="hero-title">
             <div class="hero-copy">
+                <img class="brand-logo" src="./logo.png" alt="Drone Simulator logo" onerror="this.hidden=true">
                 <p class="eyebrow">Browser Flight Simulator</p>
                 <h1 id="hero-title">Drone Simulator</h1>
                 <p class="hero-text">Choose a mode, select an aircraft, then launch into the playable WebGL simulator. The homepage is separate from the game runtime, so nothing starts in the background.</p>
+                <div class="terminal-window" aria-label="live terminal status">
+                    <div class="terminal-bar"><span></span><span></span><span></span><b>ops@drone-sim:~/launch</b></div>
+                    <div class="terminal-feed" id="terminal-feed">
+                        <p>&gt; realtime systems ready</p>
+                        <p>&gt; select mode and aircraft</p>
+                        <p>&gt; launch package standing by</p>
+                    </div>
+                </div>
             </div>
             <div class="status-card" aria-label="build status">
                 <span>Live Build</span>
                 <b>GitHub Pages</b>
                 <small>Three.js cockpit, local profiles, Supabase room presence.</small>
+                <div class="radar" aria-hidden="true"><i></i><b></b><em></em></div>
             </div>
         </section>
 
@@ -44,6 +54,7 @@
                     <div class="room-row">
                         <input id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
                         <button class="small-btn" id="btn-room-code" type="button">Create</button>
+                        <button class="small-btn" id="btn-join-room" type="button">Check</button>
                         <button class="small-btn" id="btn-copy-room" type="button">Copy Link</button>
                     </div>
                     <p id="room-status">Create a code or paste one from another player.</p>

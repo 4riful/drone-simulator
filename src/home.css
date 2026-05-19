@@ -56,6 +56,14 @@ button,input{font:inherit}
     border-radius:24px;
 }
 .hero-copy{padding:34px}
+.brand-logo{
+    width:72px;
+    height:72px;
+    object-fit:contain;
+    display:block;
+    margin-bottom:18px;
+    filter:drop-shadow(0 0 22px rgba(56,242,160,.28));
+}
 .eyebrow,.step{
     color:var(--accent);
     text-transform:uppercase;
@@ -67,6 +75,41 @@ h1,h2,p{margin:0}
 h1{font-size:clamp(42px, 8vw, 86px);line-height:.92;letter-spacing:-.07em;margin:14px 0 18px}
 h2{font-size:clamp(20px, 3vw, 28px);letter-spacing:-.04em}
 .hero-text{max-width:760px;color:#b9c9cc;font-size:clamp(15px, 1.6vw, 18px);line-height:1.7}
+.terminal-window{
+    margin-top:24px;
+    border:1px solid rgba(56,242,160,.24);
+    background:rgba(1,8,7,.62);
+    border-radius:18px;
+    overflow:hidden;
+}
+.terminal-bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(56,242,160,.16);
+    background:rgba(56,242,160,.06);
+    color:#a8f6c5;
+    font-size:12px;
+}
+.terminal-bar span{
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 14px rgba(56,242,160,.6);
+}
+.terminal-bar span:nth-child(2){background:var(--warn)}
+.terminal-bar span:nth-child(3){background:var(--accent-2)}
+.terminal-feed{
+    min-height:118px;
+    padding:15px;
+    color:#9fffc3;
+    font-size:13px;
+    line-height:1.8;
+}
+.terminal-feed p{animation:terminalIn .26s ease both}
+@keyframes terminalIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .small-btn{
     border:1px solid rgba(56,242,160,.32);
     color:var(--accent);
@@ -81,6 +124,38 @@ h2{font-size:clamp(20px, 3vw, 28px);letter-spacing:-.04em}
 .status-card span,.about-list span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.14em}
 .status-card b{font-size:32px;line-height:1.05;letter-spacing:-.05em}
 .status-card small{color:#9fb5b9;line-height:1.6}
+.radar{
+    position:relative;
+    width:148px;
+    height:148px;
+    margin-top:24px;
+    border:1px solid rgba(86,199,255,.22);
+    border-radius:50%;
+    background:
+        radial-gradient(circle, rgba(86,199,255,.12) 0 2px, transparent 3px),
+        repeating-radial-gradient(circle, transparent 0 24px, rgba(86,199,255,.16) 25px 26px),
+        linear-gradient(rgba(86,199,255,.16), rgba(56,242,160,.08));
+    overflow:hidden;
+}
+.radar i{
+    position:absolute;
+    inset:50% 50% auto auto;
+    width:70px;
+    height:1px;
+    background:linear-gradient(90deg, var(--accent), transparent);
+    transform-origin:left center;
+    animation:sweep 2.6s linear infinite;
+}
+.radar b,.radar em{
+    position:absolute;
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--accent-2);
+    box-shadow:0 0 16px rgba(86,199,255,.85);
+}
+.radar b{left:42px;top:54px}.radar em{right:38px;bottom:44px;background:var(--accent)}
+@keyframes sweep{to{transform:rotate(360deg)}}
 .setup-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start}
 .panel{padding:22px}
 .mode-panel{grid-row:span 2}
@@ -146,6 +221,7 @@ h2{font-size:clamp(20px, 3vw, 28px);letter-spacing:-.04em}
 }
 @media (max-width:620px){
     .hero-copy,.panel,.status-card{border-radius:18px;padding:18px}
+    .brand-logo{width:58px;height:58px}
     .card-grid.five{grid-template-columns:1fr}
     .choice{min-height:auto}
     .room-row{grid-template-columns:1fr}
