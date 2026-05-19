@@ -87,13 +87,17 @@ function setActive(selector, attr, value) {
   });
 }
 
-document.getElementById('mode-grid').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-mode]');
-  if (!button) return;
-  selectedMode = button.dataset.mode;
+function selectMode(mode) {
+  selectedMode = mode;
   setActive('[data-mode]', 'mode', selectedMode);
   if (selectedMode === 'multiplayer' && !$roomCode.value) $roomCode.value = makeRoomCode();
   updateSummary();
+}
+
+document.getElementById('mode-grid').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-mode]');
+  if (!button) return;
+  selectMode(button.dataset.mode);
 });
 
 $aircraftMenu.addEventListener('change', () => {
@@ -102,6 +106,7 @@ $aircraftMenu.addEventListener('change', () => {
 });
 
 document.getElementById('btn-room-code').addEventListener('click', () => {
+  selectMode('multiplayer');
   $roomCode.value = makeRoomCode();
   lastRoomCheck = { room: $roomCode.value, activePilots: 0, ok: true };
   $roomStatus.textContent = `Room ${$roomCode.value} created. Share the code with player two.`;
@@ -109,9 +114,7 @@ document.getElementById('btn-room-code').addEventListener('click', () => {
 });
 
 document.getElementById('btn-join-room').addEventListener('click', async () => {
-  selectedMode = 'multiplayer';
-  setActive('[data-mode]', 'mode', selectedMode);
-  updateSummary();
+  selectMode('multiplayer');
   const room = normalizeRoom($roomCode.value);
   if (!room) {
     $roomStatus.textContent = 'Enter a room code or press Create.';
@@ -154,6 +157,7 @@ document.getElementById('btn-join-room').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-copy-room').addEventListener('click', async () => {
+  selectMode('multiplayer');
   if (!$roomCode.value) $roomCode.value = makeRoomCode();
   const url = gameUrl().toString();
   try {

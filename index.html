@@ -5,152 +5,155 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
     <meta name="description" content="A browser drone simulator with solo missions and two-player online battle rooms.">
-    <link rel="stylesheet" href="./src/home.css?v=home-base-20260520">
+    <link rel="stylesheet" href="./src/home.css?v=single-display-20260520">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="is-landing">
-    <div id="menu-screen" class="screen landing-page">
-        <div class="m">
-            <div class="m-head home-head">
-                <div class="home-hero">
-                    <div class="home-copy">
-                        <div class="m-tag home-tag">
-                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4zm0 3.1L7 7.6V12c0 3.2 2 5.8 5 6.9 3-1.1 5-3.7 5-6.9V7.6l-5-2.5z"/></svg>
-                            Public Home Base
-                        </div>
-                        <h1>Drone Simulator</h1>
-                        <h2>Mission Control Launcher</h2>
-                        <div class="home-banner">
-                            <b>Pick a sortie. Arm the airframe. Launch the sim.</b>
-                            <span>Fast setup for single-player missions, training flights, free flight, and two-player online battle rooms.</span>
-                        </div>
-                    </div>
-
-                    <div class="home-graphic" aria-label="drone radar graphic">
-                        <div class="radar-card">
-                            <div class="radar-ring radar-ring-1"></div>
-                            <div class="radar-ring radar-ring-2"></div>
-                            <div class="radar-ring radar-ring-3"></div>
-                            <div class="radar-sweep"></div>
-                            <span class="radar-dot dot-a"></span>
-                            <span class="radar-dot dot-b"></span>
-                            <span class="radar-dot dot-c"></span>
-                            <svg class="drone-mark" viewBox="0 0 160 120" aria-hidden="true">
-                                <path d="M80 21l16 30 39 10-34 14-21 24-21-24-34-14 39-10 16-30z"/>
-                                <path d="M80 50l13 16-13 30-13-30 13-16z"/>
-                                <circle cx="31" cy="59" r="10"/>
-                                <circle cx="129" cy="59" r="10"/>
-                            </svg>
-                            <div class="radar-caption">
-                                <strong>WEBGL READY</strong>
-                                <span>city combat sandbox online</span>
-                            </div>
-                        </div>
-                    </div>
+<body>
+    <main class="launch-shell">
+        <section class="hero-panel">
+            <div class="brand-row">
+                <div class="brand-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4zm0 3L7 7.5V12c0 3 2 5.5 5 6.6 3-1.1 5-3.6 5-6.6V7.5L12 5z"/></svg>
                 </div>
-
-                <div class="terminal-hero" aria-label="launcher brief">
-                    <div class="terminal-bar"><span></span><span></span><span></span><b>launcher@simulator:~/preflight</b></div>
-                    <div class="terminal-lines" id="terminal-feed">
-                        <p><span>1</span> choose a game mode</p>
-                        <p><span>2</span> select aircraft and battle room</p>
-                        <p><span>3</span> launch when ready</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="m-section mode-section">
-                <div class="m-label"><span class="step-num">01</span> Select Game Mode</div>
-                <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
-                    <button class="mode-card active" type="button" data-mode="single" aria-pressed="true"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"/></svg></span><b>Single</b><span>Balanced solo sortie with hostiles and objectives.</span></button>
-                    <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v4H4V5zm2 6h12v8H6v-8zm3 2v4h6v-4H9z"/></svg></span><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
-                    <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 109 9h-3a6 6 0 11-6-6V3zm1 0v9h8a9 9 0 00-8-9z"/></svg></span><b>Mission</b><span>Full combat mission with stronger scoring pressure.</span></button>
-                    <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 13l18-9-5 17-4-7-7 3-2-4z"/></svg></span><b>Free Flight</b><span>Explore, practice landings, no enemies.</span></button>
-                    <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7a4 4 0 118 0 4 4 0 01-8 0zm-4 14a7 7 0 0114 0H3zm14-8a3 3 0 100-6 5.9 5.9 0 01.7 6H17zm1.5 8a8.9 8.9 0 00-2.4-5.4A6 6 0 0123 21h-4.5z"/></svg></span><b>Online Battle</b><span>Two-player battle room with radar contacts.</span></button>
-                </div>
-                <div id="brief" class="mode-brief">Single pilot combat sortie. Existing systems stay enabled.</div>
-                <div id="room-panel" class="online-setup">
-                    <div class="m-label">Online Battle Room</div>
-                    <div class="m-row"><label>Battle Code</label><input id="room-code" class="m-input" type="text" maxlength="24" placeholder="DRN-482K"></div>
-                    <div class="online-actions">
-                        <button class="btn btn-sm" id="btn-room-code" type="button">Create Battle</button>
-                        <button class="btn btn-sm" id="btn-join-room" type="button">Join Battle</button>
-                        <button class="btn btn-sm" id="btn-copy-room" type="button">Copy Invite</button>
-                    </div>
-                    <div class="online-actions"><span id="room-status">Ready. Create a battle or join by code.</span></div>
-                </div>
-            </div>
-
-            <div class="m-section aircraft-section">
-                <div class="m-label"><span class="step-num">02</span> Aircraft</div>
-                <div class="m-body">
-                    <div class="m-row">
-                        <label>Aircraft</label>
-                        <select id="aircraft-menu" class="m-sel">
-                            <option value="drone">MQ-9 Reaper</option>
-                            <option value="helicopter">MQ-8B Fire Scout</option>
-                        </select>
-                    </div>
-                    <div id="aircraft-brief" class="mode-brief">Fixed-wing drone feel with higher speed and longer mission profile.</div>
-                </div>
-            </div>
-
-            <div class="launch-panel">
                 <div>
-                    <div class="m-label"><span class="step-num">03</span> Ready</div>
-                    <p>Review the mode and aircraft, then enter the simulator.</p>
+                    <p class="eyebrow">Browser Combat Flight Sim</p>
+                    <h1>Drone Simulator</h1>
                 </div>
-                <button class="m-start" id="btn-launch">Launch Mission</button>
-                <div class="launch-note" id="launch-note">Single mode | MQ-9 Reaper</div>
             </div>
 
-            <details class="m-section">
-                <summary>Controls</summary>
-                <div class="m-body">
-                    <div class="m-keys">
-                        <div><span>W S</span> Pitch</div>
-                        <div><span>A D</span> Roll</div>
-                        <div><span>Q E</span> Yaw</div>
-                        <div><span>Space / Shift</span> Up / Down</div>
-                        <div><span>F / Click</span> Fire</div>
-                        <div><span>Tab</span> Boost</div>
-                        <div><span>T</span> Lock Target</div>
-                        <div><span>L</span> Follow</div>
-                        <div><span>H</span> Help</div>
-                        <div><span>G</span> Headlight</div>
-                        <div><span>Esc</span> Pause</div>
-                    </div>
-                    <div class="m-keys-note">Gamepad: Mode 2 RC &mdash; L-Stick throttle+yaw, R-Stick pitch+roll, D-Pad targeting. Configure in Settings.</div>
-                </div>
-            </details>
+            <div class="hero-copy">
+                <h2>Mission control in one screen.</h2>
+                <p>Choose the mode, airframe, and online room from this launcher. Press launch and the selected setup opens directly in gameplay.</p>
+            </div>
 
-            <div class="m-btns">
-                <a class="btn home-game-link" href="./game.html">
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5z"/></svg>
-                    Open Game Page
+            <div class="radar-card" aria-label="drone radar graphic">
+                <span class="radar-axis axis-x"></span>
+                <span class="radar-axis axis-y"></span>
+                <span class="radar-ring ring-1"></span>
+                <span class="radar-ring ring-2"></span>
+                <span class="radar-ring ring-3"></span>
+                <span class="radar-sweep"></span>
+                <span class="radar-dot dot-a"></span>
+                <span class="radar-dot dot-b"></span>
+                <span class="radar-dot dot-c"></span>
+                <svg class="drone-mark" viewBox="0 0 160 120" aria-hidden="true">
+                    <path d="M80 17l18 34 42 12-37 16-23 25-23-25-37-16 42-12 18-34z"/>
+                    <path d="M80 49l14 18-14 32-14-32 14-18z"/>
+                    <circle cx="30" cy="62" r="10"/>
+                    <circle cx="130" cy="62" r="10"/>
+                </svg>
+                <div class="radar-label"><b>WEBGL READY</b><span>city sandbox online</span></div>
+            </div>
+
+            <div class="quick-stats">
+                <div><span>Modes</span><b>5</b></div>
+                <div><span>Airframes</span><b>2</b></div>
+                <div><span>Online</span><b>Rooms</b></div>
+            </div>
+        </section>
+
+        <section class="setup-panel">
+            <div class="section-head">
+                <span>01</span>
+                <div>
+                    <h3>Game Mode</h3>
+                    <p id="brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</p>
+                </div>
+            </div>
+
+            <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
+                <button class="mode-card active" type="button" data-mode="single" aria-pressed="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"/></svg>
+                    <b>Single</b><span>Combat sortie</span>
+                </button>
+                <button class="mode-card" type="button" data-mode="training" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v4H4V5zm2 6h12v8H6v-8zm3 2v4h6v-4H9z"/></svg>
+                    <b>Training</b><span>Learn controls</span>
+                </button>
+                <button class="mode-card" type="button" data-mode="mission" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 109 9h-3a6 6 0 11-6-6V3zm1 0v9h8a9 9 0 00-8-9z"/></svg>
+                    <b>Mission</b><span>High pressure</span>
+                </button>
+                <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13l18-9-5 17-4-7-7 3-2-4z"/></svg>
+                    <b>Free Flight</b><span>Explore city</span>
+                </button>
+                <button class="mode-card" type="button" data-mode="multiplayer" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7a4 4 0 118 0 4 4 0 01-8 0zm-4 14a7 7 0 0114 0H3zm14-8a3 3 0 100-6 5.9 5.9 0 01.7 6H17zm1.5 8a8.9 8.9 0 00-2.4-5.4A6 6 0 0123 21h-4.5z"/></svg>
+                    <b>Online</b><span>2-player room</span>
+                </button>
+            </div>
+
+            <div class="control-grid">
+                <div class="control-card aircraft-card">
+                    <div class="section-head small">
+                        <span>02</span>
+                        <div><h3>Aircraft</h3><p id="aircraft-brief">MQ-9 Reaper: fixed-wing drone feel with higher speed and longer mission profile.</p></div>
+                    </div>
+                    <select id="aircraft-menu" class="select-input">
+                        <option value="drone">MQ-9 Reaper</option>
+                        <option value="helicopter">MQ-8B Fire Scout</option>
+                    </select>
+                </div>
+
+                <div class="control-card room-card" id="room-panel">
+                    <div class="section-head small">
+                        <span>03</span>
+                        <div><h3>Battle Room</h3><p id="room-status">Select Online mode to create or join a room.</p></div>
+                    </div>
+                    <input id="room-code" class="text-input" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
+                    <div class="room-actions">
+                        <button id="btn-room-code" type="button">Create</button>
+                        <button id="btn-join-room" type="button">Join</button>
+                        <button id="btn-copy-room" type="button">Copy</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="info-panel">
+            <div class="launch-card">
+                <div class="launch-title">
+                    <span>Ready</span>
+                    <b id="launch-note">Single mode | MQ-9 Reaper</b>
+                </div>
+                <button class="launch-btn" id="btn-launch" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5z"/></svg>
+                    Launch Mission
+                </button>
+            </div>
+
+            <div class="terminal-card">
+                <div class="terminal-top"><i></i><i></i><i></i><span>preflight feed</span></div>
+                <div class="terminal-lines" id="terminal-feed">
+                    <p>&gt; systems online</p>
+                    <p>&gt; select mission setup</p>
+                    <p>&gt; launch opens gameplay</p>
+                </div>
+            </div>
+
+            <div class="links-card">
+                <a href="https://4riful.github.io/drone-simulator/" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5v8l-9 5-9-5V8l9-5zm0 3.2L6 9.5v5l6 3.3 6-3.3v-5l-6-3.3z"/></svg>
+                    <span><b>Play</b>4riful.github.io/drone-simulator</span>
                 </a>
-                <div class="about-grid">
-                    <a class="about-card link-card" href="https://4riful.github.io/drone-simulator/" target="_blank" rel="noopener noreferrer">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5v8l-9 5-9-5V8l9-5zm0 3.2L6 9.5v5l6 3.3 6-3.3v-5l-6-3.3z"/></svg>
-                        <b>Play</b><span>4riful.github.io/drone-simulator</span>
-                    </a>
-                    <a class="about-card link-card" href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.2-3.5-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.6 1.1 1.6 1.1.9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.3-.3-4.7-1.2-4.7-5A3.9 3.9 0 016.6 8.8c-.1-.3-.5-1.3.1-2.7 0 0 .9-.3 2.8 1a9.8 9.8 0 015 0c1.9-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 011 2.8c0 3.9-2.4 4.7-4.7 5 .4.3.7 1 .7 2V21c0 .3.2.6.8.5A10 10 0 0012 2z"/></svg>
-                        <b>Code</b><span>github.com/4riful/drone-simulator</span>
-                    </a>
-                    <div class="about-card stack-card">
-                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2zm0 2.3L6.4 7.5 12 10.7l5.6-3.2L12 4.3zM6 9.2v5.1l5 2.8V12L6 9.2zm12 0L13 12v5.1l5-2.8V9.2z"/></svg>
-                        <b>Tech Stack</b>
-                        <div class="tech-links" aria-label="technology links">
-                            <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">Three.js</a>
-                            <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API" target="_blank" rel="noopener noreferrer">WebGL</a>
-                            <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a>
-                        </div>
-                    </div>
+                <a href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.2-3.5-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.6 1.1 1.6 1.1.9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.3-.3-4.7-1.2-4.7-5A3.9 3.9 0 016.6 8.8c-.1-.3-.5-1.3.1-2.7 0 0 .9-.3 2.8 1a9.8 9.8 0 015 0c1.9-1.3 2.8-1 2.8-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 011 2.8c0 3.9-2.4 4.7-4.7 5 .4.3.7 1 .7 2V21c0 .3.2.6.8.5A10 10 0 0012 2z"/></svg>
+                    <span><b>Code</b>github.com/4riful/drone-simulator</span>
+                </a>
+            </div>
+
+            <div class="stack-card">
+                <h3>Tech Stack</h3>
+                <div class="tech-links">
+                    <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">Three.js</a>
+                    <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API" target="_blank" rel="noopener noreferrer">WebGL</a>
+                    <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a>
                 </div>
             </div>
-        </div>
-    </div>
-    <script type="module" src="./src/home.js?v=home-base-20260520"></script>
+        </aside>
+    </main>
+
+    <script type="module" src="./src/home.js?v=single-display-20260520"></script>
 </body>
 </html>
