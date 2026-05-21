@@ -616,8 +616,6 @@ let localRoomStorageHandler = null;
 let wsRelaySocket = null;
 let wsRelayConnected = false;
 let wsRelayQueue = [];
-const remoteDroneMat = new THREE.MeshStandardMaterial({ color:0x9b1018, emissive:0xff2638, emissiveIntensity:0.75, roughness:0.35, metalness:0.65 });
-const remoteDroneAccentMat = new THREE.MeshBasicMaterial({ color:0xff3348, transparent:true, opacity:0.55, side:THREE.DoubleSide, depthWrite:false });
 function normalizeRoomId(room){
     return String(room||'').toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24);
 }
@@ -763,23 +761,95 @@ function updateOnlineStatus(){
 }
 function makeRemoteDrone(){
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.0,0.62,1.55), remoteDroneMat.clone());
-    body.name = 'enemy-remote-body';
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.55,1.35,4), remoteDroneMat.clone());
-    nose.rotation.x=Math.PI/2;nose.position.z=-1.15;
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(5.3,0.11,0.24), remoteDroneMat.clone());
-    const rotorGeo = new THREE.CircleGeometry(0.55,18);
-    const rotorPts = [{x:1.55,z:1.0},{x:-1.55,z:1.0},{x:1.55,z:-1.0},{x:-1.55,z:-1.0}];
-    for(const pt of rotorPts){
-        const rotor = new THREE.Mesh(rotorGeo, remoteDroneAccentMat.clone());
-        rotor.rotation.x = -Math.PI/2;rotor.position.set(pt.x,0.24,pt.z);g.add(rotor);
-    }
-    const marker = new THREE.Mesh(new THREE.RingGeometry(2.8,3.1,32), remoteDroneAccentMat.clone());
-    marker.rotation.x = -Math.PI/2;marker.position.y = -0.55;
-    const hpBar = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.08,0.12), new THREE.MeshBasicMaterial({ color:0x49ff9a }));
-    hpBar.position.set(0,1.05,0);
-    const label=document.createElement('div');label.className='remote-drone-label';label.textContent='REMOTE';label.style.display='none';document.body.appendChild(label);
-    g.add(body,nose,wing,marker,hpBar);g.userData.label=label;g.userData.hpBar=hpBar;g.userData.marker=marker;g.visible=false;scene.add(g);return g;
+    const rMat = new THREE.MeshStandardMaterial({color:0xcc1a2a,emissive:0xff2638,emissiveIntensity:.35,roughness:.35,metalness:.8});
+    const rShellMat = new THREE.MeshStandardMaterial({color:0xdd2a3a,roughness:.38,metalness:.75});
+    const rArmMat = new THREE.MeshStandardMaterial({color:0xaa1828,roughness:.35,metalness:.8});
+    const rMotorMat = new THREE.MeshStandardMaterial({color:0xbb2030,roughness:.3,metalness:.85});
+    const rAccentMat = new THREE.MeshStandardMaterial({color:0xff3348,emissive:0xff2638,emissiveIntensity:.6,roughness:.3});
+    const rGuardMat = new THREE.MeshStandardMaterial({color:0xaa1828,roughness:.38,metalness:.78});
+    const rGunMat = new THREE.MeshStandardMaterial({color:0x882030,emissive:0x101010,emissiveIntensity:.05,roughness:.25,metalness:.92});
+    const rDiscMat = new THREE.MeshBasicMaterial({color:0xff3348,transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false});
+    const rBladeMat = new THREE.MeshBasicMaterial({color:0xff3348,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false});
+    const rSkidMat = new THREE.MeshStandardMaterial({color:0xaa2030,roughness:.5,metalness:.8});
+    const rHPBarMat = new THREE.MeshBasicMaterial({color:0x49ff9a});
+    const armGeo = new THREE.BoxGeometry(.22,.08,2.8);
+    const guardGeo = new THREE.TorusGeometry(.92,.035,6,20);
+    const bladeMat2 = new THREE.MeshBasicMaterial({color:0xff3348,transparent:true,opacity:.3,side:THREE.DoubleSide,depthWrite:false});
+    const armTips = [
+        {x:2,z:-2,front:true},{x:-2,z:-2,front:true},
+        {x:2,z:2,front:false},{x:-2,z:2,front:false}
+    ];
+    armTips.forEach(tip=>{
+        const angle=Math.atan2(tip.x,tip.z);
+        const dist=Math.sqrt(tip.x*tip.x+tip.z*tip.z);
+        const midX=tip.x*.55,midZ=tip.z*.55;
+        const arm=new THREE.Mesh(armGeo,rArmMat);
+        arm.position.set(midX,.02,midZ);arm.rotation.y=-angle;g.add(arm);
+        const ledStrip=new THREE.Mesh(new THREE.BoxGeometry(.1,.015,2.5),rAccentMat);
+        ledStrip.position.set(midX,.065,midZ);ledStrip.rotation.y=-angle;g.add(ledStrip);
+        const motor=new THREE.Mesh(new THREE.CylinderGeometry(.3,.34,.2,10),rMotorMat);
+        motor.position.set(tip.x,.12,tip.z);g.add(motor);
+        const motorCap=new THREE.Mesh(new THREE.CylinderGeometry(.15,.3,.1,10),rMotorMat);
+        motorCap.position.set(tip.x,.24,tip.z);g.add(motorCap);
+        const disc=new THREE.Mesh(new THREE.CircleGeometry(.85,20),rDiscMat);
+        disc.rotation.x=-Math.PI/2;disc.position.set(tip.x,.3,tip.z);g.add(disc);
+        for(let b=0;b<2;b++){
+            const blade=new THREE.Mesh(new THREE.PlaneGeometry(.12,.8),rBladeMat);
+            blade.rotation.x=-Math.PI/2;blade.rotation.z=b*Math.PI/2;blade.position.set(tip.x,.31,tip.z);g.add(blade);
+        }
+        const guard=new THREE.Mesh(guardGeo,rGuardMat);
+        guard.rotation.x=-Math.PI/2;guard.position.set(tip.x,.2,tip.z);g.add(guard);
+        for(let s=0;s<4;s++){
+            const sa=s*Math.PI/2;
+            const strut=new THREE.Mesh(new THREE.BoxGeometry(.03,.04,.6),rGuardMat);
+            strut.position.set(tip.x+Math.cos(sa)*.46,.2,tip.z+Math.sin(sa)*.46);
+            strut.rotation.y=sa;g.add(strut);
+        }
+        const ledColor=tip.front?0xff4080:0xff4040;
+        const led=new THREE.Mesh(new THREE.SphereGeometry(.06,6,6),new THREE.MeshBasicMaterial({color:ledColor}));
+        led.position.set(tip.x,.08,tip.z+(tip.front?-.35:.35));g.add(led);
+    });
+    const bodyLower=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.5,.35,6),rMat);
+    g.add(bodyLower);
+    const bodyUpper=new THREE.Mesh(new THREE.CylinderGeometry(.75,1.3,.22,6),rShellMat);
+    bodyUpper.position.y=.28;g.add(bodyUpper);
+    const bodyTop=new THREE.Mesh(new THREE.CylinderGeometry(.3,.75,.12,6),rShellMat);
+    bodyTop.position.y=.4;g.add(bodyTop);
+    const camDome=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8,0,Math.PI*2,0,Math.PI/2),
+        new THREE.MeshStandardMaterial({color:0x151a20,roughness:.08,metalness:1,emissive:0x532f2f,emissiveIntensity:.3}));
+    camDome.rotation.x=Math.PI;camDome.position.set(0,-.22,-1.1);g.add(camDome);
+    const battery=new THREE.Mesh(new THREE.BoxGeometry(.7,.12,1.3),new THREE.MeshStandardMaterial({color:0x381a1a,roughness:.5,metalness:.7}));
+    battery.position.set(0,-.22,0);g.add(battery);
+    [-0.55,0.55].forEach(xo=>{
+        const skid=new THREE.Mesh(new THREE.BoxGeometry(.05,.3,1.4),rSkidMat);
+        skid.position.set(xo,-.38,0);g.add(skid);
+        [-.5,.5].forEach(zo=>{
+            const strut=new THREE.Mesh(new THREE.BoxGeometry(.04,.25,.04),rSkidMat);
+            strut.position.set(xo,-.25,zo);strut.rotation.z=xo>0?-.2:.2;g.add(strut);
+        });
+    });
+    const gunPosL=new THREE.Vector3(-1.2,-.12,-2.0);
+    const gunPosR=new THREE.Vector3(1.2,-.12,-2.0);
+    [gunPosL,gunPosR].forEach(gp=>{
+        const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,1.2,6),rGunMat);
+        barrel.rotation.x=Math.PI/2;barrel.position.copy(gp);g.add(barrel);
+        const muzzle=new THREE.Mesh(new THREE.CylinderGeometry(.09,.07,.15,6),rAccentMat);
+        muzzle.rotation.x=Math.PI/2;muzzle.position.set(gp.x,gp.y,gp.z-.65);g.add(muzzle);
+    });
+    const navLightL=new THREE.Mesh(new THREE.SphereGeometry(.1,6,6),new THREE.MeshBasicMaterial({color:0xff0000}));
+    navLightL.position.set(-1.85,.05,0);g.add(navLightL);
+    const navLightR=new THREE.Mesh(new THREE.SphereGeometry(.1,6,6),new THREE.MeshBasicMaterial({color:0x00ff00}));
+    navLightR.position.set(1.85,.05,0);g.add(navLightR);
+    const strobeTop=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),new THREE.MeshBasicMaterial({color:0xffffff}));
+    strobeTop.position.set(0,.35,.3);g.add(strobeTop);
+    const strobeBtm=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),new THREE.MeshBasicMaterial({color:0xffffff}));
+    strobeBtm.position.set(0,-.35,.3);g.add(strobeBtm);
+    const tailLight=new THREE.Mesh(new THREE.SphereGeometry(.1,6,6),new THREE.MeshBasicMaterial({color:0xff2200}));
+    tailLight.position.set(0,.08,1.6);g.add(tailLight);
+    const hpBar=new THREE.Mesh(new THREE.BoxGeometry(2.6,.08,.12),rHPBarMat);
+    hpBar.position.set(0,2.0,0);
+    const label=document.createElement('div');label.className='remote-drone-label';label.textContent='ENEMY';label.style.display='none';document.body.appendChild(label);
+    g.add(hpBar);g.userData.label=label;g.userData.hpBar=hpBar;g.visible=false;scene.add(g);return g;
 }
 function ensureRemotePilot(id,state){
     const isNew = !remotePilots.has(id);
@@ -807,16 +877,26 @@ function updateRemotePilots(dt){
             rp.mesh.userData.hpBar.scale.x = Math.max(.05, hpPct);
             rp.mesh.userData.hpBar.material.color.setHex(hpPct > .5 ? 0x49ff9a : (hpPct > .25 ? 0xffd166 : 0xff4b6e));
         }
-        if(rp.mesh.userData.marker) rp.mesh.userData.marker.rotation.z += dt * 2.8;
+        const isHit = now < rp.hitUntil;
         for(const child of rp.mesh.children){
-            if(child.material?.color && child !== rp.mesh.userData.hpBar) child.material.color.setHex(now < rp.hitUntil ? 0xffffff : 0xff2638);
+            if(child.material && child !== rp.mesh.userData.hpBar){
+                if(child.material.emissive) child.material.emissive.setHex(isHit ? 0xffffff : 0x440000);
+                if(child.material.color && child.material !== rHPBarMat) child.material.color.setHex(isHit ? 0xffffff : 0xcc1a2a);
+            }
         }
         const label=rp.mesh.userData.label;
         if(label){
             const v=rp.mesh.position.clone().project(camera);
             const on=v.z<1&&Math.abs(v.x)<1.2&&Math.abs(v.y)<1.2;
             label.style.display=on?'block':'none';
-            if(on){label.style.left=((v.x*.5+.5)*innerWidth)+'px';label.style.top=((-v.y*.5+.5)*innerHeight)+'px';label.textContent=`ENEMY ${s.name||'REMOTE'} ${Math.max(0,Math.round(rp.hp ?? C.maxHP))}HP ${Math.round(rp.mesh.position.distanceTo(drone.position))}m`;}
+            if(on){
+                label.style.left=((v.x*.5+.5)*innerWidth)+'px';
+                label.style.top=((-v.y*.5+.5)*innerHeight-28)+'px';
+                label.style.opacity='0.45';
+                label.style.fontSize='8px';
+                label.style.padding='2px 4px';
+                label.textContent=`${s.name||'REMOTE'} ${Math.max(0,Math.round(rp.hp ?? C.maxHP))}HP`;
+            }
         }
     }
 }
