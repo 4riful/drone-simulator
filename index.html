@@ -5,38 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
     <meta name="description" content="A browser drone simulator with solo missions and two-player online battle rooms.">
-    <link rel="stylesheet" href="./src/home.css?v=ops-terminal-20260520-3">
+    <link rel="stylesheet" href="./src/home.css?v=andromeda-ops-20260522-1">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <main class="ops-shell">
         <header class="ops-header">
             <div class="brand-block">
-                <span class="brand-kicker">XETTAS / WEBGL OPS</span>
+                <span class="brand-kicker">ANDROMEDA / WEBGL OPS</span>
                 <h1>Drone Simulator</h1>
             </div>
             <div class="header-status" aria-label="system status">
-                <span>BUILD 3.2</span>
-                <span>STATIC DEPLOY</span>
-                <span>REALTIME READY</span>
+                <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"/><path d="M8 7V4h8v3M8 17v3h8v-3"/></svg>BUILD 3.2</span>
+                <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>STATIC DEPLOY</span>
+                <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M8 13a4 4 0 0 1 8 0"/><path d="M12 17h.01"/></svg>REALTIME READY</span>
             </div>
         </header>
 
         <section class="panel intro-panel">
             <div class="panel-title">
                 <span>00</span>
+                <svg class="ico panel-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 11h6M9 15h5"/></svg>
                 <b>Mission Brief</b>
             </div>
             <div class="intro-copy">
                 <h2>Configure. Launch. Fly.</h2>
-                <p>One screen for mode, aircraft, online room, project links, and launch. No separate homepage action. The launch button sends the selected setup into gameplay.</p>
+                <p>Andromeda command deck for mode, aircraft, online room, project links, and launch. One button sends the selected setup straight into gameplay.</p>
             </div>
 
             <div class="system-table">
-                <div><span>Runtime</span><b>Three.js WebGL</b></div>
-                <div><span>Rooms</span><b>Supabase Realtime</b></div>
-                <div><span>Profile</span><b>Local browser storage</b></div>
-                <div><span>Input</span><b>Keyboard / Mouse / Gamepad</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M8 21h8M12 18v3"/></svg><span>Runtime</span><b>Three.js WebGL</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 0 1 14 0"/><path d="M8.5 12a3.5 3.5 0 0 1 7 0"/><path d="M12 16h.01"/></svg><span>Rooms</span><b>Supabase Realtime</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7c0-2 12-2 12 0v10c0 2-12 2-12 0z"/><path d="M6 7c0 2 12 2 12 0M6 12c0 2 12 2 12 0"/></svg><span>Profile</span><b>Local browser storage</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10l3 5-3 5H7l-3-5z"/><path d="M8 13h4M10 11v4M16 12h.01M18 14h.01"/></svg><span>Input</span><b>Keyboard / Mouse / Gamepad</b></div>
             </div>
 
             <div class="terminal-card">
@@ -52,6 +53,7 @@
         <section class="panel mode-panel">
             <div class="panel-title">
                 <span>01</span>
+                <svg class="ico panel-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg>
                 <b>Select Game Mode</b>
             </div>
             <p class="mode-summary" id="brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</p>
@@ -59,30 +61,35 @@
             <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
                 <button class="mode-card active" type="button" data-mode="single" aria-pressed="true">
                     <span class="mode-index">01</span>
+                    <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/></svg>
                     <b>Single</b>
                     <span>Combat sortie</span>
                     <em>Hostiles, scoring, fuel</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="training" aria-pressed="false">
                     <span class="mode-index">02</span>
+                    <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l8 4-8 4-8-4z"/><path d="M6 10v5c2 2 10 2 12 0v-5"/></svg>
                     <b>Training</b>
                     <span>Flight school</span>
                     <em>No combat pressure</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="mission" aria-pressed="false">
                     <span class="mode-index">03</span>
+                    <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-4 7-11V5l-7-3-7 3v5c0 7 7 11 7 11z"/><path d="M9 12l2 2 4-5"/></svg>
                     <b>Mission</b>
                     <span>Objective run</span>
                     <em>High-score pressure</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false">
                     <span class="mode-index">04</span>
+                    <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16l18-8-8 18-2-8z"/></svg>
                     <b>Free Flight</b>
                     <span>Open city</span>
                     <em>Practice and explore</em>
                 </button>
                 <button class="mode-card" type="button" data-mode="multiplayer" aria-pressed="false">
                     <span class="mode-index">05</span>
+                    <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M2 21a5 5 0 0 1 10 0M12 21a5 5 0 0 1 10 0"/></svg>
                     <b>Online</b>
                     <span>Battle room</span>
                     <em>Two-player presence</em>
@@ -91,7 +98,7 @@
 
             <div class="config-grid">
                 <div class="config-block">
-                    <div class="block-label"><span>02</span><b>Aircraft</b></div>
+                    <div class="block-label"><span>02</span><svg class="ico panel-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 7H21l-5.4 3.8 2 6.2-5.6-3.8L6.4 20l2-6.2L3 10h6.5z"/></svg><b>Aircraft</b></div>
                     <select id="aircraft-menu" class="control-input">
                         <option value="drone">MQ-9 Reaper</option>
                         <option value="helicopter">MQ-8B Fire Scout</option>
@@ -100,7 +107,7 @@
                 </div>
 
                 <div class="config-block room-card" id="room-panel">
-                    <div class="block-label"><span>03</span><b>Online Room</b></div>
+                    <div class="block-label"><span>03</span><svg class="ico panel-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h5M15 12h5M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/><path d="M12 3v6M12 15v6"/></svg><b>Online Room</b></div>
                     <input id="room-code" class="control-input" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off">
                     <div class="room-actions">
                         <button id="btn-room-code" type="button">Create</button>
@@ -115,35 +122,36 @@
         <aside class="panel action-panel">
             <div class="panel-title">
                 <span>04</span>
+                <svg class="ico panel-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h14M7 19l5-16 5 16M9 13h6"/></svg>
                 <b>Launch Control</b>
             </div>
 
             <div class="readout-grid" aria-label="launch readout">
-                <div><span>MODE</span><b id="launch-note">Single mode | MQ-9 Reaper</b></div>
-                <div><span>WORLD</span><b>City / Weather / Hostiles</b></div>
-                <div><span>DISPLAY</span><b>HUD + Cockpit Telemetry</b></div>
-                <div><span>LINK</span><b>Local + Realtime Rooms</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M8 5v14"/></svg><span>MODE</span><b id="launch-note">Single mode | MQ-9 Reaper</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span>WORLD</span><b>City / Weather / Hostiles</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h4"/></svg><span>DISPLAY</span><b>HUD + Cockpit Telemetry</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg><span>LINK</span><b>Local + Realtime Rooms</b></div>
             </div>
 
             <button class="launch-btn" id="btn-launch" type="button">
-                <span>Launch Mission</span>
+                <span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l4 10h6l-5 4 2 6-7-4-7 4 2-6-5-4h6z"/></svg>Launch Mission</span>
                 <b>Enter Gameplay</b>
             </button>
 
             <div class="links-grid">
-                <a href="https://4riful.github.io/drone-simulator/" target="_blank" rel="noopener noreferrer"><span>Play</span><b>4riful.github.io/drone-simulator</b></a>
-                <a href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer"><span>Code</span><b>github.com/4riful/drone-simulator</b></a>
+                <a href="https://4riful.github.io/drone-simulator/" target="_blank" rel="noopener noreferrer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>Play</span><b>4riful.github.io/drone-simulator</b></a>
+                <a href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-5 1-5-2-7-3M15 22v-4a3 3 0 0 0-1-2c3 0 6-1 6-6a5 5 0 0 0-1-3 4 4 0 0 0 0-3s-1 0-3 1a10 10 0 0 0-6 0C8 4 7 4 7 4a4 4 0 0 0 0 3 5 5 0 0 0-1 3c0 5 3 6 6 6a3 3 0 0 0-1 2v4"/></svg><span>Code</span><b>github.com/4riful/drone-simulator</b></a>
             </div>
 
             <div class="stack-strip">
                 <span>Stack</span>
-                <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer">Three.js</a>
-                <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API" target="_blank" rel="noopener noreferrer">WebGL</a>
-                <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a>
+                <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17L12 3l8 14z"/><path d="M8 17l4-7 4 7"/></svg>Three.js</a>
+                <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API" target="_blank" rel="noopener noreferrer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M8 10l2 2-2 2M13 14h3"/></svg>WebGL</a>
+                <a href="https://supabase.com/" target="_blank" rel="noopener noreferrer"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 9-12h-6z"/></svg>Supabase</a>
             </div>
         </aside>
     </main>
 
-    <script type="module" src="./src/home.js?v=ops-terminal-20260520-3"></script>
+    <script type="module" src="./src/home.js?v=andromeda-ops-20260522-1"></script>
 </body>
 </html>
