@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
     <meta name="description" content="A browser drone simulator with solo missions and two-player online battle rooms.">
-    <link rel="stylesheet" href="./src/home.css?v=andromeda-ops-20260522-1">
+    <link rel="stylesheet" href="./src/home.css?v=andromeda-clean-20260522-2">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <main class="ops-shell">
         <header class="ops-header">
             <div class="brand-block">
-                <span class="brand-kicker">ANDROMEDA / WEBGL OPS</span>
+                <span class="brand-kicker">ANDROMEDA OPS / WEBGL</span>
                 <h1>Drone Simulator</h1>
             </div>
             <div class="header-status" aria-label="system status">
@@ -30,12 +30,12 @@
             </div>
             <div class="intro-copy">
                 <h2>Configure. Launch. Fly.</h2>
-                <p>Andromeda command deck for mode, aircraft, online room, project links, and launch. One button sends the selected setup straight into gameplay.</p>
+                <p>Clean command deck for mode, aircraft, online battle room, project links, and launch. No separate game page decision path: one launch button enters gameplay.</p>
             </div>
 
             <div class="system-table">
                 <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M8 21h8M12 18v3"/></svg><span>Runtime</span><b>Three.js WebGL</b></div>
-                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 0 1 14 0"/><path d="M8.5 12a3.5 3.5 0 0 1 7 0"/><path d="M12 16h.01"/></svg><span>Rooms</span><b>Supabase Realtime</b></div>
+                <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 0 1 14 0"/><path d="M8.5 12a3.5 3.5 0 0 1 7 0"/><path d="M12 16h.01"/></svg><span>Rooms</span><b>Local + Supabase Realtime</b></div>
                 <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7c0-2 12-2 12 0v10c0 2-12 2-12 0z"/><path d="M6 7c0 2 12 2 12 0M6 12c0 2 12 2 12 0"/></svg><span>Profile</span><b>Local browser storage</b></div>
                 <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10l3 5-3 5H7l-3-5z"/><path d="M8 13h4M10 11v4M16 12h.01M18 14h.01"/></svg><span>Input</span><b>Keyboard / Mouse / Gamepad</b></div>
             </div>
@@ -92,7 +92,7 @@
                     <svg class="ico mode-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M2 21a5 5 0 0 1 10 0M12 21a5 5 0 0 1 10 0"/></svg>
                     <b>Online</b>
                     <span>Battle room</span>
-                    <em>Two-player presence</em>
+                    <em>Same-room drone battle</em>
                 </button>
             </div>
 
@@ -152,6 +152,6 @@
         </aside>
     </main>
 
-    <script type="module" src="./src/home.js?v=andromeda-ops-20260522-1"></script>
+    <script type="module" src="./src/home.js?v=andromeda-clean-20260522-2"></script>
 </body>
 </html>

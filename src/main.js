@@ -606,9 +606,15 @@ let onlineConnected = false;
 let onlineLastTrack = 0;
 let onlineConfig = {...ONLINE_DEFAULTS};
 const onlineClientId = `pilot_${(globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`;
+const onlineCallsign = `RAVEN-${hashString(onlineClientId).toString(36).slice(-3).toUpperCase()}`;
 const remotePilots = new Map();
 const receivedOnlineHits = new Set();
-const remoteDroneMat = new THREE.MeshBasicMaterial({ color:0x49d8ff, wireframe:true, transparent:true, opacity:0.68 });
+let localRoomChannel = null;
+let localRoomKey = '';
+let localRoomConnected = false;
+let localRoomStorageHandler = null;
+const remoteDroneMat = new THREE.MeshStandardMaterial({ color:0x9b1018, emissive:0xff2638, emissiveIntensity:0.75, roughness:0.35, metalness:0.65 });
+const remoteDroneAccentMat = new THREE.MeshBasicMaterial({ color:0xff3348, transparent:true, opacity:0.55, side:THREE.DoubleSide, depthWrite:false });
 function normalizeRoomId(room){
     return String(room||'').toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24);
 }
@@ -655,10 +661,17 @@ function roomInviteUrl(){
     url.searchParams.set('room', room || makeRoomCode());
     return url.toString();
 }
+function multiplayerCallsign(){
+    const base = String(activeProfile?.name || '').trim();
+    if(S.gameMode!=='multiplayer') return base || 'Viper-1';
+    if(!base || /^viper-?1$/i.test(base)) return onlineCallsign;
+    const cleanBase = base.toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,12) || 'PILOT';
+    return `${cleanBase}-${onlineCallsign.slice(-3)}`;
+}
 function setOnlineStatus(text, kind='warn'){
     const el=document.getElementById('online-status');
     if(el){el.textContent=text;el.classList.remove('online-good','online-warn','online-bad');el.classList.add(`online-${kind}`);}
-    if(ssOnline){ssOnline.textContent = text.toUpperCase().includes('ONLINE') ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
+    if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
 }
 async function loadOnlineConfig(){
     const saved = await dbGetSetting('onlineConfig');
@@ -714,7 +727,7 @@ async function copyOnlineInvite(){
     }
 }
 function getOnlineStateLabel(){
-    if(onlineConnected) return `Online ${remotePilots.size+1} pilot(s)`;
+    if(onlineConnected || localRoomConnected) return `Room ${onlineConfig.room}: ${remotePilots.size+1} pilot(s)`;
     return onlineConfig.room ? `Ready. Battle ${onlineConfig.room}` : 'Ready. Create or join a battle.';
 }
 async function checkOnlineRoomPresence(room){
@@ -742,22 +755,33 @@ async function checkOnlineRoomPresence(room){
 function updateOnlineStatus(){
     if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), 'good'); return; }
     const remoteCount = remotePilots.size;
-    const txt = remoteCount ? `Online ${remoteCount+1} pilot(s) - ${remoteCount} radar contact(s)` : `Online 1 pilot - waiting for room ${onlineConfig.room}`;
+    const txt = remoteCount ? `Room ${onlineConfig.room}: ${remoteCount+1} pilot(s) - ${remoteCount} battle contact(s)` : `Room ${onlineConfig.room}: waiting for another pilot`;
     setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
 }
 function makeRemoteDrone(){
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4,0.45,1.25), remoteDroneMat);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.45,1.1,4), remoteDroneMat);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.0,0.62,1.55), remoteDroneMat.clone());
+    body.name = 'enemy-remote-body';
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.55,1.35,4), remoteDroneMat.clone());
     nose.rotation.x=Math.PI/2;nose.position.z=-1.15;
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(4.4,0.08,0.18), remoteDroneMat);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(5.3,0.11,0.24), remoteDroneMat.clone());
+    const rotorGeo = new THREE.CircleGeometry(0.55,18);
+    const rotorPts = [{x:1.55,z:1.0},{x:-1.55,z:1.0},{x:1.55,z:-1.0},{x:-1.55,z:-1.0}];
+    for(const pt of rotorPts){
+        const rotor = new THREE.Mesh(rotorGeo, remoteDroneAccentMat.clone());
+        rotor.rotation.x = -Math.PI/2;rotor.position.set(pt.x,0.24,pt.z);g.add(rotor);
+    }
+    const marker = new THREE.Mesh(new THREE.RingGeometry(2.8,3.1,32), remoteDroneAccentMat.clone());
+    marker.rotation.x = -Math.PI/2;marker.position.y = -0.55;
     const hpBar = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.08,0.12), new THREE.MeshBasicMaterial({ color:0x49ff9a }));
     hpBar.position.set(0,1.05,0);
     const label=document.createElement('div');label.className='remote-drone-label';label.textContent='REMOTE';label.style.display='none';document.body.appendChild(label);
-    g.add(body,nose,wing,hpBar);g.userData.label=label;g.userData.hpBar=hpBar;g.visible=false;scene.add(g);return g;
+    g.add(body,nose,wing,marker,hpBar);g.userData.label=label;g.userData.hpBar=hpBar;g.userData.marker=marker;g.visible=false;scene.add(g);return g;
 }
 function ensureRemotePilot(id,state){
-    if(!remotePilots.has(id)) remotePilots.set(id,{mesh:makeRemoteDrone(),lastSeen:performance.now(),state:null,hp:C.maxHP,hitUntil:0});
+    const isNew = !remotePilots.has(id);
+    if(isNew) remotePilots.set(id,{mesh:makeRemoteDrone(),lastSeen:performance.now(),state:null,hp:C.maxHP,hitUntil:0});
+    if(isNew) notify(`ENEMY JOINED ${state.name||'REMOTE'}`,'kill-note');
     const rp=remotePilots.get(id);rp.lastSeen=performance.now();rp.state=state;rp.hp=Number.isFinite(state.hp)?state.hp:rp.hp;return rp;
 }
 function removeRemotePilot(id){
@@ -780,17 +804,27 @@ function updateRemotePilots(dt){
             rp.mesh.userData.hpBar.scale.x = Math.max(.05, hpPct);
             rp.mesh.userData.hpBar.material.color.setHex(hpPct > .5 ? 0x49ff9a : (hpPct > .25 ? 0xffd166 : 0xff4b6e));
         }
+        if(rp.mesh.userData.marker) rp.mesh.userData.marker.rotation.z += dt * 2.8;
         for(const child of rp.mesh.children){
-            if(child.material?.color && child !== rp.mesh.userData.hpBar) child.material.color.setHex(now < rp.hitUntil ? 0xff4b6e : 0x49d8ff);
+            if(child.material?.color && child !== rp.mesh.userData.hpBar) child.material.color.setHex(now < rp.hitUntil ? 0xffffff : 0xff2638);
         }
         const label=rp.mesh.userData.label;
         if(label){
             const v=rp.mesh.position.clone().project(camera);
             const on=v.z<1&&Math.abs(v.x)<1.2&&Math.abs(v.y)<1.2;
             label.style.display=on?'block':'none';
-            if(on){label.style.left=((v.x*.5+.5)*innerWidth)+'px';label.style.top=((-v.y*.5+.5)*innerHeight)+'px';label.textContent=`${s.name||'REMOTE'} ${Math.max(0,Math.round(rp.hp ?? C.maxHP))}HP ${Math.round(rp.mesh.position.distanceTo(drone.position))}m`;}
+            if(on){label.style.left=((v.x*.5+.5)*innerWidth)+'px';label.style.top=((-v.y*.5+.5)*innerHeight)+'px';label.textContent=`ENEMY ${s.name||'REMOTE'} ${Math.max(0,Math.round(rp.hp ?? C.maxHP))}HP ${Math.round(rp.mesh.position.distanceTo(drone.position))}m`;}
         }
     }
+}
+function nearestRemotePilot(maxDist=500){
+    let best=null, bestD=maxDist;
+    for(const rp of remotePilots.values()){
+        if(!rp.mesh.visible || (rp.hp ?? C.maxHP) <= 0) continue;
+        const d=drone.position.distanceTo(rp.mesh.position);
+        if(d<bestD){best=rp;bestD=d;}
+    }
+    return best ? { rp:best, d:bestD } : null;
 }
 function applyRemoteHit(id, damage=C.multiplayerDmg){
     const rp=remotePilots.get(id);
@@ -800,9 +834,10 @@ function applyRemoteHit(id, damage=C.multiplayerDmg){
     boom(rp.mesh.position.clone(), rp.hp > 0);
 }
 function sendOnlineHit(targetId, pos){
-    if(!onlineConnected || !onlineChannel || !targetId) return;
+    if(!targetId) return;
     const hit = { hitId:`${onlineClientId}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, from:onlineClientId, target:targetId, damage:C.multiplayerDmg, p:[pos.x,pos.y,pos.z], ts:Date.now() };
-    onlineChannel.send({ type:'broadcast', event:'hit', payload:hit }).catch(()=>{});
+    sendLocalRoomMessage('hit', hit);
+    if(onlineConnected && onlineChannel) onlineChannel.send({ type:'broadcast', event:'hit', payload:hit }).catch(()=>{});
 }
 function receiveOnlineHit(hit){
     if(!hit || hit.target !== onlineClientId || receivedOnlineHits.has(hit.hitId)) return;
@@ -811,17 +846,60 @@ function receiveOnlineHit(hit){
     if(Array.isArray(hit.p)) boom(new THREE.Vector3(hit.p[0], hit.p[1], hit.p[2]), true);
     takeDmg(Number(hit.damage) || C.multiplayerDmg, `${hit.from||'REMOTE'} HIT`);
 }
+function localRoomMessage(room, type, payload){
+    return { room:normalizeRoomId(room), type, payload, source:onlineClientId, ts:Date.now() };
+}
+function handleLocalRoomMessage(msg){
+    if(!msg || msg.source===onlineClientId || normalizeRoomId(msg.room)!==normalizeRoomId(onlineConfig.room)) return;
+    if(msg.type==='state'){
+        const s=msg.payload;
+        if(!s||s.id===onlineClientId||!s.p||!s.q) return;
+        ensureRemotePilot(s.id,s);updateOnlineStatus();
+    }else if(msg.type==='hit'){
+        receiveOnlineHit(msg.payload);
+    }
+}
+function sendLocalRoomMessage(type, payload){
+    if(!localRoomConnected || !localRoomKey) return;
+    const msg = localRoomMessage(onlineConfig.room, type, payload);
+    try{localRoomChannel?.postMessage(msg);}catch(_){}
+    try{localStorage.setItem(localRoomKey, JSON.stringify(msg));}catch(_){}
+}
+function startLocalRoom(room){
+    stopLocalRoom();
+    const normalizedRoom = normalizeRoomId(room);
+    if(!normalizedRoom) return;
+    localRoomKey = `drone-simulator-room:${normalizedRoom}`;
+    localRoomConnected = true;
+    if('BroadcastChannel' in globalThis){
+        localRoomChannel = new BroadcastChannel(localRoomKey);
+        localRoomChannel.onmessage = e => handleLocalRoomMessage(e.data);
+    }
+    localRoomStorageHandler = e => {
+        if(e.key!==localRoomKey || !e.newValue) return;
+        try{handleLocalRoomMessage(JSON.parse(e.newValue));}catch(_){}
+    };
+    window.addEventListener('storage', localRoomStorageHandler);
+}
+function stopLocalRoom(){
+    if(localRoomChannel){try{localRoomChannel.close();}catch(_){} localRoomChannel=null;}
+    if(localRoomStorageHandler){window.removeEventListener('storage', localRoomStorageHandler);localRoomStorageHandler=null;}
+    localRoomKey='';localRoomConnected=false;
+}
 async function connectOnlineRoom(){
     if(S.gameMode!=='multiplayer') return;
     await saveOnlineRoom();
     if(!onlineConfig.room){setOnlineStatus('Create or enter a battle code first.', 'bad');notify('CREATE OR JOIN BATTLE','kill-note');return;}
-    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus('Online backend is not configured.', 'bad');notify('ONLINE CONFIG MISSING','kill-note');return;}
+    if(onlineChannel || localRoomConnected) await disconnectOnlineRoom();
+    const room = normalizeRoomId(onlineConfig.room);
+    startLocalRoom(room);
+    updateOnlineStatus();
+    await trackOnlineState(true);
+    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus(`Room ${room}: local tab battle ready`, 'warn');notify('LOCAL ROOM READY','ring-note');return;}
     try{
         if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
         const { createClient } = await supabaseModulePromise;
         if(!supabaseClient) supabaseClient = createClient(onlineConfig.url, onlineConfig.key, { auth:{ persistSession:false, autoRefreshToken:false } });
-        if(onlineChannel) await disconnectOnlineRoom();
-        const room = normalizeRoomId(onlineConfig.room);
         onlineChannel = supabaseClient.channel(`drone-simulator:${room}`, { config:{ presence:{ key: onlineClientId } } });
         onlineChannel.on('presence',{event:'sync'},()=>{
             const state=onlineChannel.presenceState();
@@ -831,7 +909,7 @@ async function connectOnlineRoom(){
                 const latest=rows?.[rows.length-1];
                 if(latest?.p&&latest?.q){seen.add(id);ensureRemotePilot(id,latest);}
             }
-            for(const id of remotePilots.keys()) if(!seen.has(id)) removeRemotePilot(id);
+            if(!localRoomConnected) for(const id of remotePilots.keys()) if(!seen.has(id)) removeRemotePilot(id);
             updateOnlineStatus();
         });
         onlineChannel.on('broadcast',{event:'state'},payload=>{
@@ -842,25 +920,28 @@ async function connectOnlineRoom(){
             if(status==='SUBSCRIBED'){
                 onlineConnected=true;updateOnlineStatus();notify(`ONLINE ROOM ${room}`,'ring-note');await trackOnlineState(true);
             }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-                onlineConnected=false;setOnlineStatus(`Online ${status.toLowerCase()}`, 'bad');
+                onlineConnected=false;setOnlineStatus(`Room ${room}: local ready, realtime ${status.toLowerCase()}`, 'warn');
             }
         });
-    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus('Online failed. Check Supabase config.', 'bad');notify('ONLINE CONNECT FAILED','kill-note');}
+    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus(`Room ${room}: local tab battle ready`, 'warn');notify('LOCAL ROOM READY','ring-note');}
 }
 async function disconnectOnlineRoom(){
     if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
-    onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
+    stopLocalRoom();onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
 }
 function onlinePayload(){
-    return { id:onlineClientId, profileId:activeProfileId, name:activeProfile?.name||'Pilot', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), maxHp:C.maxHP, fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
+    return { id:onlineClientId, profileId:activeProfileId, name:multiplayerCallsign(), team:'enemy', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), maxHp:C.maxHP, fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
 }
 async function trackOnlineState(force=false){
-    if(!onlineConnected||!onlineChannel) return;
+    if(S.gameMode!=='multiplayer' || (!localRoomConnected && (!onlineConnected||!onlineChannel))) return;
     const now=performance.now();
     if(!force&&now-onlineLastTrack<120) return;
     onlineLastTrack=now;
     const payload=onlinePayload();
-    try{await onlineChannel.track(payload);onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});}catch(e){console.warn('Online track failed',e);}
+    sendLocalRoomMessage('state', payload);
+    if(onlineConnected&&onlineChannel){
+        try{await onlineChannel.track(payload);onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});}catch(e){console.warn('Online track failed',e);}
+    }
 }
 
 /* Sky dome with gradient */
@@ -2577,13 +2658,13 @@ function fire(){
     sndLaser(); vib(45,.1,.18);
 }
 function findRemoteBulletHit(b){
-    if(S.gameMode !== 'multiplayer' || !onlineConnected) return null;
+    if(S.gameMode !== 'multiplayer' || (!onlineConnected && !localRoomConnected)) return null;
     let best = null;
     let bestDist = Infinity;
     for(const [id,rp] of remotePilots){
         if(!rp.mesh.visible || (rp.hp ?? C.maxHP) <= 0) continue;
         const dist = b.position.distanceTo(rp.mesh.position);
-        if(dist < 3.0 && dist < bestDist){ best = { id, rp, dist }; bestDist = dist; }
+        if(dist < 5.5 && dist < bestDist){ best = { id, rp, dist }; bestDist = dist; }
     }
     return best;
 }
@@ -3320,7 +3401,7 @@ for(let _i=0;_i<12;_i++){
     $threats.appendChild(arr);_threatArrows.push(arr);
 }
 function updHUD(spd,dt=1/60){
-    $hPilot.textContent = (activeProfile?.name || 'VIPER-1').toUpperCase();
+    $hPilot.textContent = S.gameMode==='multiplayer' ? `YOU ${multiplayerCallsign()}` : (activeProfile?.name || 'VIPER-1').toUpperCase();
     $hScore.textContent=S.score;$hDist.textContent=Math.round(S.dist);$hKills.textContent=S.kills;$hRings.textContent=S.rings;
     const pct=(S.hp/C.maxHP)*100;$hpBar.style.width=pct+'%';$hpBar.classList.toggle('low',pct<30);
     document.getElementById('hp-label').textContent='HULL '+Math.max(0,Math.round(S.hp))+'/'+C.maxHP;
@@ -3376,8 +3457,8 @@ function updHUD(spd,dt=1/60){
     }
     if(ssMode) ssMode.textContent = getModeCfg().label.toUpperCase();
     if(ssOnline){
-        ssOnline.textContent = onlineConnected ? String(remotePilots.size+1) : 'OFF';
-        ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected);
+        ssOnline.textContent = (onlineConnected || localRoomConnected) ? String(remotePilots.size+1) : 'OFF';
+        ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected && !localRoomConnected);
         ssOnline.classList.toggle('bad-sys', S.gameMode==='multiplayer' && !onlineConfig.url);
     }
     if($flightWarn){
@@ -3403,6 +3484,23 @@ function updHUD(spd,dt=1/60){
             arr.style.transform='translate(-50%,-50%) rotate('+(ang+Math.PI/2)+'rad)';
         }
     }
+    if(S.gameMode==='multiplayer'){
+        for(const rp of remotePilots.values()){
+            if(_taIdx>=_threatArrows.length) break;
+            if(!rp.mesh.visible || (rp.hp ?? C.maxHP) <= 0) continue;
+            const sp=rp.mesh.position.clone().project(camera);
+            const sx=(sp.x*.5+.5)*sw, sy=(1-sp.y*.5-.5)*sh;
+            if(sp.z>1||sx<-20||sx>sw+20||sy<-20||sy>sh+20){
+                const ang=Math.atan2(sy-cy,sx-cx);
+                const margin=40;
+                const exx=cx+Math.cos(ang)*(cx-margin), eyy=cy+Math.sin(ang)*(cy-margin);
+                const arr=_threatArrows[_taIdx++];
+                arr.style.display='';
+                arr.style.left=exx+'px';arr.style.top=eyy+'px';
+                arr.style.transform='translate(-50%,-50%) rotate('+(ang+Math.PI/2)+'rad)';
+            }
+        }
+    }
     for(let ti=_taIdx;ti<_threatArrows.length;ti++) _threatArrows[ti].style.display='none';
     /* Power-up indicator */
     if(activePU){
@@ -3418,7 +3516,14 @@ function updHUD(spd,dt=1/60){
         $lockInfo.textContent = `LOCK: ${nm.toUpperCase()} • ${Math.round(d)}m${lockFollow?' • FOLLOW':''}`;
         $lockInfo.classList.add('show');
     }else{
-        $lockInfo.classList.remove('show');
+        const contact = S.gameMode==='multiplayer' ? nearestRemotePilot() : null;
+        if(contact){
+            const nm = contact.rp.state?.name || 'REMOTE';
+            $lockInfo.textContent = `ENEMY CONTACT: ${nm.toUpperCase()} • ${Math.round(contact.d)}m`;
+            $lockInfo.classList.add('show');
+        }else{
+            $lockInfo.classList.remove('show');
+        }
     }
     /* Objectives */
     checkObjective(dt);
@@ -3434,7 +3539,7 @@ function updMinimap(){
     mmC.fillStyle='#40b8e0';for(const r of rings){if(r.userData.got)continue;const dx=(r.position.x-drone.position.x)*sc,dz2=(r.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#60a0d0';for(const o of orbs){if(o.userData.got)continue;const dx=(o.position.x-drone.position.x)*sc,dz2=(o.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,2,0,Math.PI*2);mmC.fill();}
     mmC.fillStyle='#e05540';for(const e of enemies){const dx=(e.position.x-drone.position.x)*sc,dz2=(e.position.z-drone.position.z)*sc;if(Math.abs(dx)>72||Math.abs(dz2)>72)continue;mmC.beginPath();mmC.arc(cx+dx,cy+dz2,3,0,Math.PI*2);mmC.fill();}
-    mmC.fillStyle='#49d8ff';mmC.strokeStyle='rgba(73,216,255,.8)';mmC.lineWidth=1.5;for(const rp of remotePilots.values()){if(!rp.mesh.visible)continue;const dx=(rp.mesh.position.x-drone.position.x)*sc,dz2=(rp.mesh.position.z-drone.position.z)*sc;const px=THREE.MathUtils.clamp(cx+dx,8,MM-8),py=THREE.MathUtils.clamp(cy+dz2,8,MM-8);const far=px!==cx+dx||py!==cy+dz2;mmC.beginPath();mmC.arc(px,py,far?5:4,0,Math.PI*2);mmC.fill();mmC.beginPath();mmC.arc(px,py,far?9:7,0,Math.PI*2);mmC.stroke();if(far){mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(px,py);mmC.stroke();}}
+    mmC.fillStyle='#ff3348';mmC.strokeStyle='rgba(255,51,72,.9)';mmC.lineWidth=1.8;for(const rp of remotePilots.values()){if(!rp.mesh.visible)continue;const dx=(rp.mesh.position.x-drone.position.x)*sc,dz2=(rp.mesh.position.z-drone.position.z)*sc;const px=THREE.MathUtils.clamp(cx+dx,8,MM-8),py=THREE.MathUtils.clamp(cy+dz2,8,MM-8);const far=px!==cx+dx||py!==cy+dz2;mmC.beginPath();mmC.arc(px,py,far?5:4,0,Math.PI*2);mmC.fill();mmC.beginPath();mmC.arc(px,py,far?10:8,0,Math.PI*2);mmC.stroke();mmC.beginPath();mmC.moveTo(px-5,py);mmC.lineTo(px+5,py);mmC.moveTo(px,py-5);mmC.lineTo(px,py+5);mmC.stroke();if(far){mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(px,py);mmC.stroke();}}
     mmC.fillStyle='#60c0e8';mmC.beginPath();mmC.arc(cx,cy,3,0,Math.PI*2);mmC.fill();
     const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(drone.quaternion);mmC.strokeStyle='#60c0e8';mmC.lineWidth=1.5;mmC.beginPath();mmC.moveTo(cx,cy);mmC.lineTo(cx+fwd.x*12,cy+fwd.z*12);mmC.stroke();
     mmC.strokeStyle='rgba(60,90,120,.3)';mmC.lineWidth=1;mmC.strokeRect(0,0,MM,MM);
