@@ -3204,13 +3204,28 @@ let gpIdx=null, mouseDown=false;
 let gpPausePrev=false, gpHeadPrev=false, gpFlipPrev=false, gpCamPrev=false;
 let gpDUpPrev=false, gpDDownPrev=false, gpDLeftPrev=false, gpDRightPrev=false;
 let headlightOn=true, camFar=false;
-const isAndroidMobile=/Android/i.test(navigator.userAgent) && matchMedia('(pointer: coarse)').matches;
+const isAndroidDevice=/Android/i.test(navigator.userAgent||'');
+const hasTouchInput=('ontouchstart' in window) || navigator.maxTouchPoints>0 || matchMedia('(pointer: coarse)').matches;
+const isMobileControlsDevice=isAndroidDevice || (hasTouchInput && Math.min(innerWidth,innerHeight)<=900);
 let mobileTipDismissed=false;
+let hasRequestedFullscreen=false;
 const touchInput={moveX:0,moveY:0,lookX:0,lookY:0,fire:false,boost:false,up:false,down:false,brake:false,lock:false,lockPrev:false};
+function requestAndroidFullscreen(){
+    if(!isAndroidDevice) return;
+    if(hasRequestedFullscreen) return;
+    const elem=document.documentElement;
+    if(elem.requestFullscreen){
+        elem.requestFullscreen().catch(()=>{});
+        hasRequestedFullscreen=true;
+    }else if(elem.webkitRequestFullscreen){ // Safari
+        elem.webkitRequestFullscreen().catch(()=>{});
+        hasRequestedFullscreen=true;
+    }
+}
 function updateMobileMode(){
-    document.body.classList.toggle('android-mobile', isAndroidMobile);
-    document.body.classList.toggle('portrait', isAndroidMobile && !mobileTipDismissed && innerHeight>innerWidth);
-    document.body.classList.toggle('playing', isAndroidMobile && S.mode==='playing');
+    document.body.classList.toggle('android-mobile', isMobileControlsDevice);
+    document.body.classList.toggle('portrait', isMobileControlsDevice && !mobileTipDismissed && innerHeight>innerWidth);
+    document.body.classList.toggle('playing', isMobileControlsDevice && S.mode==='playing');
 }
 function setupTouchStick(el, axisX, axisY){
     if(!el) return;
@@ -3239,11 +3254,11 @@ function setupTouchStick(el, axisX, axisY){
     el.addEventListener('pointercancel',reset,{passive:false});
 }
 function setupMobileControls(){
-    if(!isAndroidMobile) return;
+    if(!isMobileControlsDevice) return;
     setupTouchStick(document.getElementById('touch-move'),'moveX','moveY');
     setupTouchStick(document.getElementById('touch-look'),'lookX','lookY');
     const tip=document.getElementById('btn-mobile-tip');
-    tip?.addEventListener('pointerdown',()=>{mobileTipDismissed=true;updateMobileMode();});
+    tip?.addEventListener('pointerdown',()=>{mobileTipDismissed=true;updateMobileMode();requestAndroidFullscreen();});
     document.querySelectorAll('[data-touch]').forEach(btn=>{
         const key=btn.dataset.touch;
         const set=v=>{touchInput[key]=v;btn.classList.toggle('active',v);};
@@ -3809,7 +3824,7 @@ function startGame(){
     comboCount=0;comboTimer=0;objIdx=0;objTimer=0;objShown=!getModeCfg().objective;activePU=null;puTimer=0;
     powerUps.forEach(pu=>{pu.userData.got=false;pu.visible=true;});
     $objective.classList.remove('show');
-    S.mode='playing';showScreen('playing');updateMobileMode();clock.getDelta();
+    S.mode='playing';showScreen('playing');updateMobileMode();requestAndroidFullscreen();clock.getDelta();
     document.getElementById('game-meta').style.display='none';
     periodicTimer=20+Math.random()*15;
     setTimeout(()=>radioSpeak('startup'),1500);
@@ -4238,7 +4253,7 @@ function animate(){
     if(keys['KeyF']||mouseDown) wantFire=true;
     if(keys['KeyB']||keys['ControlLeft']||keys['ControlRight']) gpBrake=true;
 
-    if(isAndroidMobile){
+    if(isMobileControlsDevice){
         moveF = THREE.MathUtils.clamp(moveF + (-touchInput.moveY), -1, 1);
         moveS = THREE.MathUtils.clamp(moveS + touchInput.moveX, -1, 1);
         yaw = THREE.MathUtils.clamp(yaw + touchInput.lookX, -1, 1);
