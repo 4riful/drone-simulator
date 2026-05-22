@@ -697,11 +697,20 @@ body.android-mobile #mobile-landscape-tip {
     background: rgba(0,0,0,.72);
     backdrop-filter: blur(8px);
 }
+body.android-mobile.direct-launch.portrait #mobile-landscape-tip,
 body.android-mobile.portrait #mobile-landscape-tip { display: grid; }
 #mobile-landscape-tip b,
 #mobile-landscape-tip span { display: block; }
 #mobile-landscape-tip b { color: var(--accent); font-size: 24px; letter-spacing: .08em; text-transform: uppercase; }
 #mobile-landscape-tip span { color: var(--text); margin: 10px 0 16px; }
+#mobile-landscape-tip::after {
+    content: 'If fullscreen is not accepted, tap Continue again after the page finishes loading.';
+    display: block;
+    max-width: 320px;
+    color: rgba(199,247,220,.62);
+    font: 700 10px/1.45 var(--font-terminal);
+    letter-spacing: .04em;
+}
 #btn-mobile-tip {
     border: 1px solid var(--line-strong);
     background: rgba(99,255,156,.12);

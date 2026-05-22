@@ -3210,16 +3210,27 @@ const isMobileControlsDevice=isAndroidDevice || (hasTouchInput && Math.min(inner
 let mobileTipDismissed=false;
 let hasRequestedFullscreen=false;
 const touchInput={moveX:0,moveY:0,lookX:0,lookY:0,fire:false,boost:false,up:false,down:false,brake:false,lock:false,lockPrev:false};
-function requestAndroidFullscreen(){
-    if(!isAndroidDevice) return;
-    if(hasRequestedFullscreen) return;
+async function requestAndroidFullscreen(){
+    if(!isMobileControlsDevice) return false;
+    if(document.fullscreenElement || document.webkitFullscreenElement){hasRequestedFullscreen=true;return true;}
     const elem=document.documentElement;
-    if(elem.requestFullscreen){
-        elem.requestFullscreen().catch(()=>{});
+    try{
+        if(elem.requestFullscreen) await elem.requestFullscreen({ navigationUI:'hide' });
+        else if(elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+        else return false;
         hasRequestedFullscreen=true;
-    }else if(elem.webkitRequestFullscreen){ // Safari
-        elem.webkitRequestFullscreen().catch(()=>{});
-        hasRequestedFullscreen=true;
+        return true;
+    }catch(_){
+        hasRequestedFullscreen=false;
+        return false;
+    }
+}
+async function requestMobileImmersive(){
+    const ok = await requestAndroidFullscreen();
+    try{
+        if(ok && screen.orientation?.lock && innerWidth>innerHeight) await screen.orientation.lock('landscape');
+    }catch(_){
+        /* Chrome may reject orientation lock outside installed/fullscreen contexts. The rotate prompt remains the fallback. */
     }
 }
 function updateMobileMode(){
@@ -3248,7 +3259,7 @@ function setupTouchStick(el, axisX, axisY){
         if(knob) knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
         ev.preventDefault?.();
     }
-    el.addEventListener('pointerdown',ev=>{activeId=ev.pointerId;el.setPointerCapture?.(ev.pointerId);move(ev);},{passive:false});
+    el.addEventListener('pointerdown',ev=>{requestMobileImmersive();activeId=ev.pointerId;el.setPointerCapture?.(ev.pointerId);move(ev);},{passive:false});
     el.addEventListener('pointermove',move,{passive:false});
     el.addEventListener('pointerup',reset,{passive:false});
     el.addEventListener('pointercancel',reset,{passive:false});
@@ -3258,11 +3269,11 @@ function setupMobileControls(){
     setupTouchStick(document.getElementById('touch-move'),'moveX','moveY');
     setupTouchStick(document.getElementById('touch-look'),'lookX','lookY');
     const tip=document.getElementById('btn-mobile-tip');
-    tip?.addEventListener('pointerdown',()=>{mobileTipDismissed=true;updateMobileMode();requestAndroidFullscreen();});
+    tip?.addEventListener('pointerdown',()=>{mobileTipDismissed=true;updateMobileMode();requestMobileImmersive();});
     document.querySelectorAll('[data-touch]').forEach(btn=>{
         const key=btn.dataset.touch;
         const set=v=>{touchInput[key]=v;btn.classList.toggle('active',v);};
-        btn.addEventListener('pointerdown',ev=>{ev.preventDefault();set(true);btn.setPointerCapture?.(ev.pointerId);},{passive:false});
+        btn.addEventListener('pointerdown',ev=>{ev.preventDefault();requestMobileImmersive();set(true);btn.setPointerCapture?.(ev.pointerId);},{passive:false});
         btn.addEventListener('pointerup',()=>set(false));
         btn.addEventListener('pointercancel',()=>set(false));
     });
@@ -3824,7 +3835,7 @@ function startGame(){
     comboCount=0;comboTimer=0;objIdx=0;objTimer=0;objShown=!getModeCfg().objective;activePU=null;puTimer=0;
     powerUps.forEach(pu=>{pu.userData.got=false;pu.visible=true;});
     $objective.classList.remove('show');
-    S.mode='playing';showScreen('playing');updateMobileMode();requestAndroidFullscreen();clock.getDelta();
+    S.mode='playing';showScreen('playing');updateMobileMode();requestMobileImmersive();clock.getDelta();
     document.getElementById('game-meta').style.display='none';
     periodicTimer=20+Math.random()*15;
     setTimeout(()=>radioSpeak('startup'),1500);

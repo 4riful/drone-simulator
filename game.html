@@ -4,11 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
-    <link rel="stylesheet" href="./src/styles.css?v=mobile-controls-20260522-3">
+    <link rel="stylesheet" href="./src/styles.css?v=android-prompt-fullscreen-20260522-4">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="is-landing">
 <script>
+    (function(){
+        var ua = navigator.userAgent || '';
+        var hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || (matchMedia && matchMedia('(pointer: coarse)').matches);
+        var mobile = /Android/i.test(ua) || (hasTouch && Math.min(innerWidth, innerHeight) <= 900);
+        function updateMobileBootClasses(){
+            document.body.classList.toggle('android-mobile', mobile);
+            document.body.classList.toggle('portrait', mobile && innerHeight > innerWidth);
+        }
+        updateMobileBootClasses();
+        addEventListener('resize', updateMobileBootClasses, { passive: true });
+        screen.orientation?.addEventListener?.('change', updateMobileBootClasses);
+    })();
     if (new URLSearchParams(location.search).has('mode') || new URLSearchParams(location.search).has('aircraft') || new URLSearchParams(location.search).has('room')) {
         document.body.classList.add('direct-launch');
     }
@@ -278,8 +290,8 @@
     </div>
 </div>
 <div id="mobile-landscape-tip" aria-live="polite">
-    <b>Rotate device</b>
-    <span>Android controls work best in landscape mode.</span>
+    <b>Rotate to landscape</b>
+    <span>Android Chrome battle controls need landscape. Tap continue to enter fullscreen, then rotate your phone.</span>
     <button id="btn-mobile-tip" type="button">Continue</button>
 </div>
 <div id="mobile-controls" aria-label="mobile flight controls">
@@ -302,6 +314,6 @@
 <div id="fuel-countdown"></div>
 <div id="fuel-warn-text"></div>
 <div id="game-meta"></div>
-<script type="module" src="./src/main.js?v=mobile-controls-20260522-3"></script>
+<script type="module" src="./src/main.js?v=android-prompt-fullscreen-20260522-4"></script>
 </body>
 </html>
