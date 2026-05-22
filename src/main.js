@@ -605,6 +605,7 @@ let onlineChannel = null;
 let onlineConnected = false;
 let onlineLastBroadcast = 0;
 let onlineLastPresence = 0;
+let onlinePresenceCount = 0;
 let onlineConfig = {...ONLINE_DEFAULTS};
 const onlineClientId = `pilot_${(globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`;
 const onlineCallsign = `RAVEN-${hashString(onlineClientId).toString(36).slice(-3).toUpperCase()}`;
@@ -670,7 +671,8 @@ function multiplayerCallsign(){
 function setOnlineStatus(text, kind='warn'){
     const el=document.getElementById('online-status');
     if(el){el.textContent=text;el.classList.remove('online-good','online-warn','online-bad');el.classList.add(`online-${kind}`);}
-    if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
+    const count = Math.max(remotePilots.size + 1, onlinePresenceCount || 0);
+    if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${count}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
 }
 async function loadOnlineConfig(){
     const saved = await dbGetSetting('onlineConfig');
@@ -726,7 +728,7 @@ async function copyOnlineInvite(){
     }
 }
 function getOnlineStateLabel(){
-    if(onlineConnected) return `Room ${onlineConfig.room}: ${remotePilots.size+1} pilot(s) via Supabase`;
+    if(onlineConnected) return `Room ${onlineConfig.room}: ${Math.max(remotePilots.size+1, onlinePresenceCount||0)} pilot(s) via Supabase`;
     if(localRoomConnected) return `Room ${onlineConfig.room}: local tab fallback only`;
     return onlineConfig.room ? `Ready. Battle ${onlineConfig.room}` : 'Ready. Create or join a battle.';
 }
@@ -755,7 +757,8 @@ async function checkOnlineRoomPresence(room){
 function updateOnlineStatus(){
     if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), localRoomConnected ? 'warn' : 'good'); return; }
     const remoteCount = remotePilots.size;
-    const txt = remoteCount ? `Room ${onlineConfig.room}: ${remoteCount+1} pilot(s) - ${remoteCount} battle contact(s)` : `Room ${onlineConfig.room}: waiting for another pilot`;
+    const pilotCount = Math.max(remoteCount + 1, onlinePresenceCount || 0);
+    const txt = remoteCount ? `Room ${onlineConfig.room}: ${pilotCount} pilot(s) - ${remoteCount} battle contact(s)` : `Room ${onlineConfig.room}: ${pilotCount} pilot(s), waiting for battle packets`;
     setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
 }
 function makeRemoteDrone(){
@@ -856,6 +859,11 @@ function ensureRemotePilot(id,state){
     if(isNew) notify(`ENEMY JOINED ${state.name||'REMOTE'}`,'kill-note');
     const rp=remotePilots.get(id);rp.lastSeen=performance.now();rp.state=state;rp.hp=Number.isFinite(state.hp)?state.hp:rp.hp;return rp;
 }
+function handleRemoteState(state){
+    if(!state || state.id===onlineClientId || !Array.isArray(state.p) || !Array.isArray(state.q)) return;
+    ensureRemotePilot(state.id, state);
+    updateOnlineStatus();
+}
 function removeRemotePilot(id){
     const rp=remotePilots.get(id);if(!rp)return;
     scene.remove(rp.mesh);rp.mesh.userData.label?.remove();remotePilots.delete(id);updateOnlineStatus();
@@ -915,11 +923,15 @@ function applyRemoteHit(id, damage=C.multiplayerDmg){
     rp.hitUntil = performance.now() + 180;
     boom(rp.mesh.position.clone(), rp.hp > 0);
 }
+function sendOnlineBroadcast(event, payload){
+    if(!onlineConnected || !onlineChannel) return;
+    try{onlineChannel.send({ type:'broadcast', event, payload }).catch(()=>{});}catch(_){}
+}
 function sendOnlineHit(targetId, pos){
     if(!targetId) return;
     const hit = { hitId:`${onlineClientId}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, from:onlineClientId, target:targetId, damage:C.multiplayerDmg, p:[pos.x,pos.y,pos.z], ts:Date.now() };
     sendLocalRoomMessage('hit', hit);
-    if(onlineConnected && onlineChannel) onlineChannel.send({ type:'broadcast', event:'hit', payload:hit }).catch(()=>{});
+    sendOnlineBroadcast('hit', hit);
 }
 function receiveOnlineHit(hit){
     if(!hit || hit.target !== onlineClientId || receivedOnlineHits.has(hit.hitId)) return;
@@ -935,8 +947,7 @@ function handleLocalRoomMessage(msg){
     if(!msg || msg.source===onlineClientId || normalizeRoomId(msg.room)!==normalizeRoomId(onlineConfig.room)) return;
     if(msg.type==='state'){
         const s=msg.payload;
-        if(!s||s.id===onlineClientId||!s.p||!s.q) return;
-        ensureRemotePilot(s.id,s);updateOnlineStatus();
+        handleRemoteState(s);
     }else if(msg.type==='hit'){
         receiveOnlineHit(msg.payload);
     }
@@ -985,22 +996,25 @@ async function connectOnlineRoom(){
         onlineChannel = supabaseClient.channel(`drone-simulator:${room}`, { config:{ broadcast:{ self:false }, presence:{ key: onlineClientId } } });
         onlineChannel.on('presence',{event:'sync'},()=>{
             const state=onlineChannel.presenceState();
-            const seen=new Set();
-            for(const [id,rows] of Object.entries(state)){
-                if(id===onlineClientId) continue;
-                const latest=rows?.[rows.length-1];
-                if(latest){seen.add(id);if(latest.p&&latest.q) ensureRemotePilot(id,latest);}
-            }
-            for(const id of [...remotePilots.keys()]) if(!seen.has(id)) removeRemotePilot(id);
+            onlinePresenceCount = Object.values(state).reduce((n,rows)=>n+(Array.isArray(rows)?rows.length:0),0);
             updateOnlineStatus();
         });
         onlineChannel.on('broadcast',{event:'state'},payload=>{
-            const s=payload.payload;if(!s||s.id===onlineClientId||!s.p||!s.q)return;ensureRemotePilot(s.id,s);updateOnlineStatus();
+            handleRemoteState(payload.payload);
+        });
+        onlineChannel.on('broadcast',{event:'join'},payload=>{
+            const join = payload.payload;
+            if(!join || join.id===onlineClientId) return;
+            sendOnlineBroadcast('state', onlinePayload());
+            notify(`ROOM CONTACT ${join.name||'REMOTE'}`,'ring-note');
         });
         onlineChannel.on('broadcast',{event:'hit'},payload=>receiveOnlineHit(payload.payload));
         onlineChannel.subscribe(async status=>{
             if(status==='SUBSCRIBED'){
-                onlineConnected=true;onlineLastBroadcast=0;onlineLastPresence=0;updateOnlineStatus();notify(`SUPABASE ROOM ${room}`,'ring-note');await trackOnlineState(true);
+                onlineConnected=true;onlineLastBroadcast=0;onlineLastPresence=0;updateOnlineStatus();notify(`SUPABASE ROOM ${room}`,'ring-note');
+                await trackOnlineState(true);
+                sendOnlineBroadcast('join', { id:onlineClientId, name:multiplayerCallsign(), room, ts:Date.now() });
+                for(let i=1;i<=5;i++) setTimeout(()=>trackOnlineState(true).catch(()=>{}), i*250);
             }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
                 onlineConnected=false;setOnlineStatus(`Room ${room}: Supabase ${status.toLowerCase()} - local tab fallback only`, 'bad');
             }
@@ -1009,7 +1023,7 @@ async function connectOnlineRoom(){
 }
 async function disconnectOnlineRoom(){
     if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
-    stopLocalRoom();onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
+    stopLocalRoom();onlineChannel=null;onlineConnected=false;onlinePresenceCount=0;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
 }
 function onlinePayload(){
     return { id:onlineClientId, profileId:activeProfileId, name:multiplayerCallsign(), team:'enemy', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), maxHp:C.maxHP, fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
@@ -1023,7 +1037,7 @@ async function trackOnlineState(force=false){
     sendLocalRoomMessage('state', payload);
     if(onlineConnected&&onlineChannel){
         try{
-            onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});
+            sendOnlineBroadcast('state', payload);
             if(force || now-onlineLastPresence>2000){onlineLastPresence=now;await onlineChannel.track(payload);}
         }catch(e){console.warn('Online track failed',e);}
     }
