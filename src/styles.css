@@ -684,6 +684,106 @@ body::before {
 #status-strip .warn-sys { color: var(--warn); }
 #status-strip .bad-sys { color: var(--danger); animation: hpPulse .8s infinite; }
 
+#mobile-landscape-tip,
+#mobile-controls { display: none; }
+body.android-mobile #mobile-landscape-tip {
+    position: fixed;
+    inset: 0;
+    z-index: 260;
+    display: none;
+    place-items: center;
+    padding: 22px;
+    text-align: center;
+    background: rgba(0,0,0,.72);
+    backdrop-filter: blur(8px);
+}
+body.android-mobile.portrait #mobile-landscape-tip { display: grid; }
+#mobile-landscape-tip b,
+#mobile-landscape-tip span { display: block; }
+#mobile-landscape-tip b { color: var(--accent); font-size: 24px; letter-spacing: .08em; text-transform: uppercase; }
+#mobile-landscape-tip span { color: var(--text); margin: 10px 0 16px; }
+#btn-mobile-tip {
+    border: 1px solid var(--line-strong);
+    background: rgba(99,255,156,.12);
+    color: var(--accent);
+    font: 800 12px/1 var(--font-terminal);
+    padding: 12px 18px;
+    text-transform: uppercase;
+}
+body.android-mobile #mobile-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 96;
+    pointer-events: none;
+}
+body.android-mobile.playing #mobile-controls { display: block; }
+.touch-stick {
+    position: absolute;
+    width: 118px;
+    height: 118px;
+    border: 1px solid rgba(109,255,178,.26);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,255,156,.09), rgba(0,0,0,.18));
+    box-shadow: inset 0 0 28px rgba(99,255,156,.08), 0 0 24px rgba(0,0,0,.2);
+    pointer-events: auto;
+    touch-action: none;
+    opacity: .72;
+}
+.touch-stick span {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 44px; height: 44px;
+    transform: translate(-50%,-50%);
+    border-radius: 50%;
+    border: 1px solid rgba(38,217,255,.45);
+    background: rgba(38,217,255,.12);
+    box-shadow: 0 0 18px rgba(38,217,255,.16);
+}
+.touch-stick b {
+    position: absolute;
+    left: 50%; bottom: -17px;
+    transform: translateX(-50%);
+    color: rgba(199,247,220,.62);
+    font: 800 9px/1 var(--font-terminal);
+    letter-spacing: .18em;
+}
+#touch-move { left: 18px; bottom: 42px; }
+#touch-look { right: 18px; bottom: 42px; }
+.touch-buttons {
+    position: absolute;
+    right: 150px;
+    bottom: 34px;
+    display: grid;
+    grid-template-columns: repeat(3, 54px);
+    gap: 8px;
+    pointer-events: auto;
+}
+.touch-btn {
+    height: 38px;
+    border: 1px solid rgba(109,255,178,.28);
+    background: rgba(0,0,0,.24);
+    color: rgba(199,247,220,.78);
+    font: 800 9px/1 var(--font-terminal);
+    letter-spacing: .08em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    touch-action: none;
+    opacity: .74;
+}
+.touch-btn.active,
+.touch-btn:active { background: rgba(99,255,156,.22); color: var(--accent); border-color: var(--line-strong); }
+.touch-btn.fire { border-color: rgba(255,95,95,.45); color: #ffb2b2; }
+.touch-btn.boost { border-color: rgba(38,217,255,.45); color: #aeefff; }
+@media (max-width: 760px) and (orientation: landscape) {
+    body.android-mobile #hud-tl,
+    body.android-mobile #hud-tr { transform: scale(.82); transform-origin: top left; }
+    body.android-mobile #hud-tr { transform-origin: top right; }
+    body.android-mobile #radio-panel { display: none; }
+    body.android-mobile #minimap { width: 92px; height: 92px; }
+    body.android-mobile #status-strip { font-size: 6px; gap: 7px; overflow: hidden; }
+    body.android-mobile #mp-debug { bottom: 88px; width: min(52vw, 340px); }
+}
+
 #dmg-flash {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: radial-gradient(ellipse at center, transparent 20%, rgba(255,0,40,0.55) 100%);

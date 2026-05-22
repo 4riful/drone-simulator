@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
-    <link rel="stylesheet" href="./src/styles.css?v=agentic-battle-city-20260522-1">
+    <link rel="stylesheet" href="./src/styles.css?v=android-real-city-20260522-1">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="is-landing">
@@ -124,7 +124,7 @@
             <div class="about-card"><b>Battle Profile</b><span>Local database stores callsign, persona, preferred mode, sorties, best score, range, kills, waypoints, and flight time.</span></div>
             <div class="about-card"><b>Battle Insight</b><span>Each mission writes a previous record so the profile panel can show recent performance and multiplayer activity.</span></div>
             <div class="about-card"><b>Cloud Sync Ready</b><span>When Supabase tables are added, profiles and battle runs sync for leaderboards and public operator pages.</span></div>
-            <div class="about-card"><b>City Map</b><span>Kortoa River, 4th China Friendship Bridge, districts, airstrip, and harbor landmarks are now map-data driven.</span></div>
+            <div class="about-card"><b>City Map</b><span>River, bridges, districts, airstrip, industrial yards, and harbor landmarks are now map-data driven.</span></div>
         </div>
     </details>
 
@@ -144,7 +144,7 @@
             <section><b>Modes</b><p>Single and Mission enable combat objectives. Training removes pressure. Free Flight disables enemies. Online Battle uses Supabase Realtime for same-room battle contacts.</p></section>
             <section><b>Profiles</b><p>Create your own callsign before launch. The HUD, radio calls, battle room identity, local records, and mission insight use that name.</p></section>
             <section><b>Radio</b><p>Radio traffic now addresses your active callsign instead of a fixed default. In online battle, your callsign is made unique for same-room combat.</p></section>
-            <section><b>City Map</b><p>The current city uses a generated harbor grid with the Kortoa River, canal roads, bridge crossings including 4th China Friendship Bridge, named districts, landmarks, parks, traffic, and building collision. A custom map can replace the layout data next.</p></section>
+            <section><b>City Map</b><p>The current city uses a generated harbor grid with river/canal roads, bridge crossings, named districts, service lots, landmarks, parks, traffic, and building collision. A custom map can replace the layout data next.</p></section>
             <section><b>Controls</b><p>W/S pitch, A/D roll, Q/E yaw, Space climb, Shift descend, F fire, Tab boost, B or Ctrl brake, T lock, L follow, H help, Esc pause.</p></section>
         </div>
         <div class="m-btns"><button class="btn btn-primary" id="btn-help-back">Back</button></div>
@@ -277,6 +277,23 @@
         <span id="ss-fps" class="val"></span>
     </div>
 </div>
+<div id="mobile-landscape-tip" aria-live="polite">
+    <b>Rotate device</b>
+    <span>Android controls work best in landscape mode.</span>
+    <button id="btn-mobile-tip" type="button">Continue</button>
+</div>
+<div id="mobile-controls" aria-label="mobile flight controls">
+    <div class="touch-stick" id="touch-move"><span></span><b>MOVE</b></div>
+    <div class="touch-stick" id="touch-look"><span></span><b>YAW</b></div>
+    <div class="touch-buttons">
+        <button class="touch-btn fire" data-touch="fire" type="button">FIRE</button>
+        <button class="touch-btn boost" data-touch="boost" type="button">BOOST</button>
+        <button class="touch-btn up" data-touch="up" type="button">UP</button>
+        <button class="touch-btn down" data-touch="down" type="button">DOWN</button>
+        <button class="touch-btn lock" data-touch="lock" type="button">LOCK</button>
+        <button class="touch-btn brake" data-touch="brake" type="button">BRAKE</button>
+    </div>
+</div>
 <div id="dmg-flash"></div>
 <div id="boost-lines"></div>
 <div id="kill-feed"></div>
@@ -285,6 +302,6 @@
 <div id="fuel-countdown"></div>
 <div id="fuel-warn-text"></div>
 <div id="game-meta"></div>
-<script type="module" src="./src/main.js?v=agentic-battle-city-20260522-1"></script>
+<script type="module" src="./src/main.js?v=android-real-city-20260522-1"></script>
 </body>
 </html>

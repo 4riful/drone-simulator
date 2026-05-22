@@ -15,7 +15,7 @@ This project is playable today, but it is still a simulator-game prototype. The 
 ## Current Features
 
 - Playable directly from GitHub Pages with a dedicated terminal-themed landing page and gameplay page.
-- Three.js city environment with buildings, roads, Kortoa River, 4th China Friendship Bridge, named districts, traffic, smoke, particles, and weather effects.
+- Three.js city environment with buildings, roads, river/canal crossings, named districts, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
 - Game modes: Single, Training, Mission, Free Flight, and Online Battle.
 - Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time, with optional Supabase cloud-sync tables documented.

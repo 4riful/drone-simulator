@@ -40,16 +40,16 @@ const C = {
 const CITY_MAP = {
     name: 'Andromeda Harbor Grid',
     waterways: [
-        { id:'main-river', name:'Kortoa River', axis:'x', offset:-0.18, width:34, lengthMul:1.48, color:'#2a4850' },
+        { id:'main-river', name:'Main River', axis:'x', offset:-0.18, width:34, lengthMul:1.48, color:'#2a4850' },
         { id:'north-canal', name:'North Canal', axis:'z', offset:0.18, width:22, lengthMul:0.78, color:'#1e4355' },
     ],
     bridges: [
-        { id:'kortoa-friendship-4', name:'4th China Friendship Bridge', waterway:'main-river', xOffset:0.09 },
+        { id:'central-river-bridge', name:'Central River Bridge', waterway:'main-river', xOffset:0.09 },
     ],
     districts: [
         { id:'command-base', name:'Command Base', x:-0.38, z:0.34, radius:42, color:0x63ff9c },
         { id:'downtown', name:'Downtown Core', x:-0.16, z:-0.02, radius:58, color:0x26d9ff },
-        { id:'riverfront', name:'Kortoa Riverfront', x:0.18, z:-0.24, radius:46, color:0xffb84d },
+        { id:'riverfront', name:'Riverfront District', x:0.18, z:-0.24, radius:46, color:0xffb84d },
         { id:'industrial', name:'Industrial Yard', x:0.34, z:0.22, radius:50, color:0xff5f5f },
     ],
     landmarks: [
@@ -1342,6 +1342,47 @@ function makeWaterTex(tint='#0a1828'){
     return tex;
 }
 
+function makeGroundTex(){
+    const cv=document.createElement('canvas'); cv.width=512; cv.height=512;
+    const cx=cv.getContext('2d');
+    cx.fillStyle='#4c4a41'; cx.fillRect(0,0,512,512);
+    for(let i=0;i<1800;i++){
+        const v=48+Math.floor(Math.random()*42);
+        const a=.08+Math.random()*.2;
+        cx.fillStyle=`rgba(${v},${v-3},${v-10},${a})`;
+        cx.fillRect(Math.random()*512,Math.random()*512,1+Math.random()*6,1+Math.random()*4);
+    }
+    for(let i=0;i<130;i++){
+        cx.strokeStyle=`rgba(28,28,24,${.08+Math.random()*.12})`;
+        cx.lineWidth=.5+Math.random()*1.4;
+        cx.beginPath();
+        const x=Math.random()*512,y=Math.random()*512;
+        cx.moveTo(x,y); cx.lineTo(x+(Math.random()-.5)*60,y+(Math.random()-.5)*36); cx.stroke();
+    }
+    for(let i=0;i<60;i++){
+        cx.fillStyle=`rgba(70,62,45,${.08+Math.random()*.12})`;
+        cx.beginPath(); cx.ellipse(Math.random()*512,Math.random()*512,8+Math.random()*28,4+Math.random()*18,Math.random()*Math.PI,0,Math.PI*2); cx.fill();
+    }
+    const tex=new THREE.CanvasTexture(cv); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(18,18);
+    return tex;
+}
+
+function makeConcreteTex(){
+    const cv=document.createElement('canvas'); cv.width=256; cv.height=256;
+    const cx=cv.getContext('2d');
+    cx.fillStyle='#6d6d66'; cx.fillRect(0,0,256,256);
+    for(let i=0;i<850;i++){
+        const v=82+Math.floor(Math.random()*55);
+        cx.fillStyle=`rgba(${v},${v},${v-4},${.08+Math.random()*.18})`;
+        cx.fillRect(Math.random()*256,Math.random()*256,1+Math.random()*4,1+Math.random()*3);
+    }
+    cx.strokeStyle='rgba(35,35,35,.22)'; cx.lineWidth=1;
+    for(let x=0;x<256;x+=64){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,256);cx.stroke();}
+    for(let y=0;y<256;y+=64){cx.beginPath();cx.moveTo(0,y);cx.lineTo(256,y);cx.stroke();}
+    const tex=new THREE.CanvasTexture(cv); tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(3,3);
+    return tex;
+}
+
 function makeMapLabelTex(title, subtitle='', tint='#8fd8ff'){
     const cv=document.createElement('canvas'); cv.width=768; cv.height=192;
     const cx=cv.getContext('2d');
@@ -1367,12 +1408,17 @@ function addMapLabel(title, subtitle, position, rotationY=0, width=34){
 function generateCity() {
     const blocks=Math.floor(C.citySize/C.blockSize), half=blocks/2;
 
-    /* Dry desert ground */
+    /* Layered city ground: dirty soil/concrete texture instead of a clean flat plane. */
     const groundGeo = new THREE.PlaneGeometry(C.citySize+200, C.citySize+200);
-    const groundMat = new THREE.MeshStandardMaterial({color:0x484840, roughness:.92, metalness:.05});
+    const groundMat = new THREE.MeshStandardMaterial({color:0x58554b, map:makeGroundTex(), roughness:.96, metalness:.03});
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI/2; ground.position.y = -0.05;
     scene.add(ground);
+    const concreteTex=makeConcreteTex();
+    const concreteMat=new THREE.MeshStandardMaterial({color:0x6a6a62,map:concreteTex,roughness:.92,metalness:.04});
+    const dirtMat=new THREE.MeshStandardMaterial({color:0x66523a,roughness:.96,metalness:.02});
+    const stainMat=new THREE.MeshBasicMaterial({color:0x171818,transparent:true,opacity:.22,depthWrite:false});
+    const grassStripMat=new THREE.MeshStandardMaterial({color:0x2f4b2d,roughness:.96});
 
     /* River and coastal water planes */
     const riverTex=makeWaterTex('#2a4850');
@@ -1381,7 +1427,7 @@ function generateCity() {
     const waterMatO=new THREE.MeshStandardMaterial({color:0x1a3848,map:oceanTex,roughness:.2,metalness:.45,transparent:true,opacity:.75});
     const riverCfg=CITY_MAP.waterways.find(w=>w.id==='main-river')||CITY_MAP.waterways[0];
     const canalCfg=CITY_MAP.waterways.find(w=>w.id==='north-canal')||CITY_MAP.waterways[1];
-    const bridgeCfg=CITY_MAP.bridges.find(b=>b.id==='kortoa-friendship-4')||CITY_MAP.bridges[0];
+    const bridgeCfg=CITY_MAP.bridges.find(b=>b.id==='central-river-bridge')||CITY_MAP.bridges[0];
     const riverW=riverCfg.width;
     const riverZ=C.citySize*riverCfg.offset;
     const river=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+240,riverW),waterMatR);
@@ -1392,13 +1438,46 @@ function generateCity() {
     const canalX=C.citySize*canalCfg.offset;
     const canal=new THREE.Mesh(new THREE.PlaneGeometry(canalW,C.citySize*.86),waterMatR);
     canal.rotation.x=-Math.PI/2; canal.position.set(canalX,-0.085,C.citySize*.05); scene.add(canal);
-    addMapLabel(riverCfg.name||'Kortoa River','Main waterway',new THREE.Vector3(-C.citySize*.28,7.2,riverZ-10),0,34);
     function cityWaterAt(x,z,pad=0){
         const inRiver = Math.abs(z-riverZ) < riverW/2 + pad;
         const inCanal = Math.abs(x-canalX) < canalW/2 + pad && z > -C.citySize*.38 && z < C.citySize*.48;
         const inHarbor = z > C.citySize*.5 - pad;
         return inRiver || inCanal || inHarbor;
     }
+
+    /* Block-level surface patches make the underside of the city feel occupied. */
+    for(let gx=0;gx<blocks;gx++){for(let gz=0;gz<blocks;gz++){
+        const x=(gx-half+.5)*C.blockSize;
+        const z=(gz-half+.5)*C.blockSize;
+        if(cityWaterAt(x,z,8) || Math.abs(x)<30&&Math.abs(z)<30) continue;
+        const roll=Math.random();
+        const w=C.blockSize-11-Math.random()*8;
+        const d=C.blockSize-11-Math.random()*8;
+        if(roll<.42){
+            const slab=new THREE.Mesh(new THREE.PlaneGeometry(w,d),concreteMat);
+            slab.rotation.x=-Math.PI/2; slab.rotation.z=(Math.random()-.5)*.02; slab.position.set(x,.006,z); scene.add(slab);
+        }else if(roll<.58){
+            const lot=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({color:0x3d3f3d,roughness:.9,metalness:.05}));
+            lot.rotation.x=-Math.PI/2; lot.position.set(x,.007,z); scene.add(lot);
+            const lineMat=new THREE.MeshBasicMaterial({color:0xd8d2aa,transparent:true,opacity:.42});
+            const slots=3+Math.floor(Math.random()*3);
+            for(let p=0;p<slots;p++){
+                const stripe=new THREE.Mesh(new THREE.PlaneGeometry(.18,d*.72),lineMat);
+                stripe.rotation.x=-Math.PI/2; stripe.position.set(x-w*.35+p*(w*.7/Math.max(1,slots-1)),.014,z); scene.add(stripe);
+            }
+        }else if(roll<.68){
+            const dirt=new THREE.Mesh(new THREE.PlaneGeometry(w,d),dirtMat);
+            dirt.rotation.x=-Math.PI/2; dirt.position.set(x,.005,z); scene.add(dirt);
+        }else if(roll<.75){
+            const grass=new THREE.Mesh(new THREE.PlaneGeometry(w*.9,d*.9),grassStripMat);
+            grass.rotation.x=-Math.PI/2; grass.position.set(x,.008,z); scene.add(grass);
+        }
+        if(Math.random()<.35){
+            const stain=new THREE.Mesh(new THREE.CircleGeometry(2+Math.random()*6,14),stainMat);
+            stain.rotation.x=-Math.PI/2; stain.scale.set(1+Math.random()*1.6,.45+Math.random()*.8,1); stain.rotation.z=Math.random()*Math.PI;
+            stain.position.set(x+(Math.random()-.5)*w*.55,.018,z+(Math.random()-.5)*d*.55); scene.add(stain);
+        }
+    }}
 
     const coast=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+420,260),waterMatO);
     coast.rotation.x=-Math.PI/2; coast.position.set(0,-0.11,C.citySize/2+120); scene.add(coast);
@@ -1410,8 +1489,16 @@ function generateCity() {
     const embR=new THREE.Mesh(new THREE.BoxGeometry(C.citySize+220,1.2,2),embankMat);
     embR.position.set(0,0.45,riverZ+riverW/2); scene.add(embR);
     [-1,1].forEach(side=>{
+        const bank=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+210,7),dirtMat);
+        bank.rotation.x=-Math.PI/2; bank.position.set(0,.012,riverZ+side*(riverW/2+4.4)); scene.add(bank);
+        const grass=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+210,2.6),grassStripMat);
+        grass.rotation.x=-Math.PI/2; grass.position.set(0,.018,riverZ+side*(riverW/2+8.4)); scene.add(grass);
+    });
+    [-1,1].forEach(side=>{
         const emb=new THREE.Mesh(new THREE.BoxGeometry(2,1.2,C.citySize*.86),embankMat);
         emb.position.set(canalX+side*(canalW/2),0.45,C.citySize*.05); scene.add(emb);
+        const bank=new THREE.Mesh(new THREE.PlaneGeometry(5,C.citySize*.84),dirtMat);
+        bank.rotation.x=-Math.PI/2; bank.position.set(canalX+side*(canalW/2+3.6),.012,C.citySize*.05); scene.add(bank);
     });
 
     /* Road asphalt texture */
@@ -1453,7 +1540,7 @@ function generateCity() {
         railR.position.set(x+3.75,0.9,riverZ); scene.add(railR);
     }
     if(namedBridge){
-        addMapLabel(bridgeCfg?.name||'4th China Friendship Bridge',riverCfg.name||'Kortoa River',new THREE.Vector3(namedBridge.position.x,5.8,riverZ+riverW*.8),0,42);
+        addMapLabel(bridgeCfg?.name||'Central River Bridge',riverCfg.name||'Main River',new THREE.Vector3(namedBridge.position.x,5.8,riverZ+riverW*.8),0,42);
     }
 
     /* Bridge decks where E/W roads cross the canal */
@@ -2019,6 +2106,20 @@ function generateCity() {
         mesh.position.set(x, h/2, z);
         scene.add(mesh);
 
+        /* Real buildings sit on plinths, plazas, loading bays, and visible foundations. */
+        const plinthMat=new THREE.MeshStandardMaterial({color:0x595955,roughness:.86,metalness:.08});
+        const plinth=new THREE.Mesh(new THREE.BoxGeometry(w+3.4,.45,d+3.4),plinthMat);
+        plinth.position.set(x,.22,z); scene.add(plinth);
+        const apron=new THREE.Mesh(new THREE.PlaneGeometry(w+8,d+8),concreteMat);
+        apron.rotation.x=-Math.PI/2; apron.position.set(x,.035,z); scene.add(apron);
+        if(Math.random()<.55){
+            const dockMat=new THREE.MeshStandardMaterial({color:0x4b4b48,roughness:.82,metalness:.18});
+            const dock=new THREE.Mesh(new THREE.BoxGeometry(Math.min(w*.55,7),.8,1.2),dockMat);
+            dock.position.set(x,.45,z-d/2-1.45); scene.add(dock);
+            const shutter=new THREE.Mesh(new THREE.PlaneGeometry(Math.min(w*.42,5.5),1.8),new THREE.MeshBasicMaterial({color:0x2f3436,transparent:true,opacity:.86,side:THREE.DoubleSide}));
+            shutter.position.set(x,1.4,z-d/2-.06); scene.add(shutter);
+        }
+
         const nc=neonCols[Math.floor(Math.random()*neonCols.length)];
         const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:nc,transparent:true,opacity:.55}));
         edges.position.copy(mesh.position); scene.add(edges);
@@ -2106,6 +2207,16 @@ function generateCity() {
         }
 
         /* Rooftop details */
+        const parapetMat=new THREE.MeshStandardMaterial({color:0x3f4548,roughness:.82,metalness:.15});
+        const pH=.7, pT=.35;
+        [[0,d/2+pT/2,w+pT*2,pT],[0,-d/2-pT/2,w+pT*2,pT],[w/2+pT/2,0,pT,d],[-w/2-pT/2,0,pT,d]].forEach(p=>{
+            const wall=new THREE.Mesh(new THREE.BoxGeometry(p[2],pH,p[3]),parapetMat);
+            wall.position.set(x+p[0],h+pH/2,z+p[1]); scene.add(wall);
+        });
+        if(Math.random()<.45){
+            const stair=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.8,2.8),new THREE.MeshStandardMaterial({color:0x4d5355,roughness:.82,metalness:.15}));
+            stair.position.set(x+(Math.random()-.5)*w*.4,h+.9,z+(Math.random()-.5)*d*.4); scene.add(stair);
+        }
         if(Math.random()<.5){
             const acGeo=new THREE.BoxGeometry(1.5+Math.random()*2,.8+Math.random()*1.5,1.5+Math.random()*2);
             const acMat=new THREE.MeshStandardMaterial({color:0x909088,roughness:.7,metalness:.45});
@@ -3093,6 +3204,57 @@ let gpIdx=null, mouseDown=false;
 let gpPausePrev=false, gpHeadPrev=false, gpFlipPrev=false, gpCamPrev=false;
 let gpDUpPrev=false, gpDDownPrev=false, gpDLeftPrev=false, gpDRightPrev=false;
 let headlightOn=true, camFar=false;
+const isAndroidMobile=/Android/i.test(navigator.userAgent) && matchMedia('(pointer: coarse)').matches;
+let mobileTipDismissed=false;
+const touchInput={moveX:0,moveY:0,lookX:0,lookY:0,fire:false,boost:false,up:false,down:false,brake:false,lock:false,lockPrev:false};
+function updateMobileMode(){
+    document.body.classList.toggle('android-mobile', isAndroidMobile);
+    document.body.classList.toggle('portrait', isAndroidMobile && !mobileTipDismissed && innerHeight>innerWidth);
+    document.body.classList.toggle('playing', isAndroidMobile && S.mode==='playing');
+}
+function setupTouchStick(el, axisX, axisY){
+    if(!el) return;
+    const knob=el.querySelector('span');
+    let activeId=null;
+    function reset(){
+        activeId=null; touchInput[axisX]=0; touchInput[axisY]=0;
+        if(knob) knob.style.transform='translate(-50%,-50%)';
+    }
+    function move(ev){
+        const p=Array.from(ev.changedTouches||[]).find(t=>t.identifier===activeId) || (ev.pointerId===activeId ? ev : null);
+        if(!p) return;
+        const r=el.getBoundingClientRect();
+        const cx=r.left+r.width/2, cy=r.top+r.height/2;
+        const max=r.width*.38;
+        const dx=THREE.MathUtils.clamp(p.clientX-cx,-max,max);
+        const dy=THREE.MathUtils.clamp(p.clientY-cy,-max,max);
+        touchInput[axisX]=dx/max;
+        touchInput[axisY]=dy/max;
+        if(knob) knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        ev.preventDefault?.();
+    }
+    el.addEventListener('pointerdown',ev=>{activeId=ev.pointerId;el.setPointerCapture?.(ev.pointerId);move(ev);},{passive:false});
+    el.addEventListener('pointermove',move,{passive:false});
+    el.addEventListener('pointerup',reset,{passive:false});
+    el.addEventListener('pointercancel',reset,{passive:false});
+}
+function setupMobileControls(){
+    if(!isAndroidMobile) return;
+    setupTouchStick(document.getElementById('touch-move'),'moveX','moveY');
+    setupTouchStick(document.getElementById('touch-look'),'lookX','lookY');
+    const tip=document.getElementById('btn-mobile-tip');
+    tip?.addEventListener('pointerdown',()=>{mobileTipDismissed=true;updateMobileMode();});
+    document.querySelectorAll('[data-touch]').forEach(btn=>{
+        const key=btn.dataset.touch;
+        const set=v=>{touchInput[key]=v;btn.classList.toggle('active',v);};
+        btn.addEventListener('pointerdown',ev=>{ev.preventDefault();set(true);btn.setPointerCapture?.(ev.pointerId);},{passive:false});
+        btn.addEventListener('pointerup',()=>set(false));
+        btn.addEventListener('pointercancel',()=>set(false));
+    });
+    window.addEventListener('resize',updateMobileMode);
+    screen.orientation?.addEventListener?.('change',updateMobileMode);
+    updateMobileMode();
+}
 
 window.addEventListener('keydown',e=>{
     keys[e.code]=true;
@@ -3243,7 +3405,7 @@ function takeDmg(n, sourceLabel=''){
 function gameOver(){
     if(S.mode==='gameover') return;
     disconnectOnlineRoom().catch(()=>{});
-    S.mode='gameover';boom(drone.position.clone());sndBoom(true);vib(500,1,1);showScreen('gameover');
+    S.mode='gameover';boom(drone.position.clone());sndBoom(true);vib(500,1,1);showScreen('gameover');updateMobileMode();
     try{
         document.getElementById('fuel-warn-overlay').classList.remove('active','critical');
         document.getElementById('fuel-countdown').classList.remove('show');
@@ -3456,6 +3618,7 @@ function showScreen(name){
     else if(name==='settings'){$settings.classList.remove('hidden'); startUiAmbience();}
     else if(name==='help'){$help.classList.remove('hidden'); startUiAmbience();}
     else if(name==='playing'){$hud.classList.remove('hidden'); stopUiAmbience();}
+    updateMobileMode();
 }
 function openHelp(){
     helpReturnMode = S.mode;
@@ -3617,6 +3780,7 @@ async function applyRunToProfile(){
 }
 function startGame(){
     document.body.classList.remove('direct-launch');
+    updateMobileMode();
     if(!$profileMenu.value && activeProfileId) $profileMenu.value = activeProfileId;
     activeProfileId = $profileMenu.value || activeProfileId;
     activeProfile = { id: activeProfileId, name: $profileMenu.selectedOptions[0]?.textContent || activeProfile.name, persona:selectedPersona, preferredMode:S.gameMode };
@@ -3645,7 +3809,7 @@ function startGame(){
     comboCount=0;comboTimer=0;objIdx=0;objTimer=0;objShown=!getModeCfg().objective;activePU=null;puTimer=0;
     powerUps.forEach(pu=>{pu.userData.got=false;pu.visible=true;});
     $objective.classList.remove('show');
-    S.mode='playing';showScreen('playing');clock.getDelta();
+    S.mode='playing';showScreen('playing');updateMobileMode();clock.getDelta();
     document.getElementById('game-meta').style.display='none';
     periodicTimer=20+Math.random()*15;
     setTimeout(()=>radioSpeak('startup'),1500);
@@ -3653,8 +3817,12 @@ function startGame(){
     if(S.gameMode==='multiplayer') connectOnlineRoom();
 }
 function togglePause(){
-    if(S.mode==='playing'){S.mode='paused';showScreen('pause');}
-    else if(S.mode==='paused'){S.mode='playing';showScreen('playing');clock.getDelta();trackOnlineState(true).catch(()=>{});}
+    if(S.mode==='playing'){
+        S.mode='paused';showScreen('pause');updateMobileMode();
+    }
+    else if(S.mode==='paused'){
+        S.mode='playing';showScreen('playing');updateMobileMode();clock.getDelta();trackOnlineState(true).catch(()=>{});
+    }
 }
 function exitToMenu(){
     disconnectOnlineRoom().catch(()=>{});
@@ -3716,6 +3884,7 @@ document.querySelectorAll('select').forEach(s=>{
 });
 applySettingsToUI();
 applyVehicleMode();
+setupMobileControls();
 (async ()=>{
     await initDB();
     await loadControlSettings();
@@ -4069,6 +4238,19 @@ function animate(){
     if(keys['KeyF']||mouseDown) wantFire=true;
     if(keys['KeyB']||keys['ControlLeft']||keys['ControlRight']) gpBrake=true;
 
+    if(isAndroidMobile){
+        moveF = THREE.MathUtils.clamp(moveF + (-touchInput.moveY), -1, 1);
+        moveS = THREE.MathUtils.clamp(moveS + touchInput.moveX, -1, 1);
+        yaw = THREE.MathUtils.clamp(yaw + touchInput.lookX, -1, 1);
+        if(Math.abs(touchInput.lookY) > 0.08) pitch = THREE.MathUtils.clamp(pitch + (-touchInput.lookY*.55), -1, 1);
+        if(touchInput.up) vert = THREE.MathUtils.clamp(vert + 1, -1, 1);
+        if(touchInput.down) vert = THREE.MathUtils.clamp(vert - 1, -1, 1);
+        if(touchInput.fire) wantFire = true;
+        if(touchInput.brake) gpBrake = true;
+        if(touchInput.lock && !touchInput.lockPrev) toggleLockTarget();
+        touchInput.lockPrev = touchInput.lock;
+    }
+
     /* Gamepad Mode-2 mapping: analog values ADD to keyboard (both sources blend) */
     /* Left stick Y → Throttle (up = climb, inverted axis) */
     vert = THREE.MathUtils.clamp(vert + (-gpLY), -1, 1);
@@ -4103,7 +4285,7 @@ function animate(){
 
     /* Boost: A button / Tab / L3 (turbo) */
     const _wasBoosting=S.boosting;
-    S.boosting=!!(keys['Tab']||gpBoost||gpL3);
+    S.boosting=!!(keys['Tab']||gpBoost||gpL3||touchInput.boost);
     if(S.boosting&&!_wasBoosting&&S.boost>0) sndBoost(true);
     if(!S.boosting&&_wasBoosting) sndBoost(false);
     if(S.boosting&&S.boost>0){S.boost-=28*dt;if(S.boost<=0){S.boost=0;S.boosting=false;sndBoost(false);}}
