@@ -606,6 +606,9 @@ let onlineConnected = false;
 let onlineLastBroadcast = 0;
 let onlineLastPresence = 0;
 let onlinePresenceCount = 0;
+let onlineReconnectTimer = null;
+let onlineReconnectAttempts = 0;
+const onlineStats = { sent:0, received:0, joins:0, hits:0, lastReceiveAt:0, lastStatus:'OFF' };
 let onlineConfig = {...ONLINE_DEFAULTS};
 const onlineClientId = `pilot_${(globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`;
 const onlineCallsign = `RAVEN-${hashString(onlineClientId).toString(36).slice(-3).toUpperCase()}`;
@@ -671,6 +674,7 @@ function multiplayerCallsign(){
 function setOnlineStatus(text, kind='warn'){
     const el=document.getElementById('online-status');
     if(el){el.textContent=text;el.classList.remove('online-good','online-warn','online-bad');el.classList.add(`online-${kind}`);}
+    onlineStats.lastStatus = text;
     const count = Math.max(remotePilots.size + 1, onlinePresenceCount || 0);
     if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${count}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
 }
@@ -760,6 +764,18 @@ function updateOnlineStatus(){
     const pilotCount = Math.max(remoteCount + 1, onlinePresenceCount || 0);
     const txt = remoteCount ? `Room ${onlineConfig.room}: ${pilotCount} pilot(s) - ${remoteCount} battle contact(s)` : `Room ${onlineConfig.room}: ${pilotCount} pilot(s), waiting for battle packets`;
     setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
+}
+function scheduleOnlineReconnect(reason='closed'){
+    if(S.gameMode!=='multiplayer' || S.mode!=='playing' || !onlineConfig.room) return;
+    if(onlineReconnectTimer) return;
+    onlineConnected=false;
+    const delay = Math.min(8000, 1200 + onlineReconnectAttempts * 900);
+    onlineReconnectAttempts++;
+    setOnlineStatus(`Room ${onlineConfig.room}: Supabase ${reason.toLowerCase()} - reconnecting`, 'warn');
+    onlineReconnectTimer = setTimeout(()=>{
+        onlineReconnectTimer=null;
+        connectOnlineRoom({ preserveLocal:true }).catch(()=>scheduleOnlineReconnect('failed'));
+    }, delay);
 }
 function makeRemoteDrone(){
     const g = new THREE.Group();
@@ -861,6 +877,8 @@ function ensureRemotePilot(id,state){
 }
 function handleRemoteState(state){
     if(!state || state.id===onlineClientId || !Array.isArray(state.p) || !Array.isArray(state.q)) return;
+    onlineStats.received++;
+    onlineStats.lastReceiveAt = performance.now();
     ensureRemotePilot(state.id, state);
     updateOnlineStatus();
 }
@@ -874,7 +892,7 @@ function cleanupRemotePilots(){
 function updateRemotePilots(dt){
     const now=performance.now();
     for(const [id,rp] of remotePilots){
-        if(now-rp.lastSeen>12000){removeRemotePilot(id);continue;}
+        if(now-rp.lastSeen>45000){removeRemotePilot(id);continue;}
         const s=rp.state;if(!s)continue;
         rp.mesh.visible=true;
         rp.mesh.position.lerp(new THREE.Vector3(s.p[0],s.p[1],s.p[2]),Math.min(1,dt*8));
@@ -888,7 +906,7 @@ function updateRemotePilots(dt){
         for(const child of rp.mesh.children){
             if(child.material && child !== rp.mesh.userData.hpBar){
                 if(child.material.emissive) child.material.emissive.setHex(isHit ? 0xffffff : 0x440000);
-                if(child.material.color && child.material !== rHPBarMat) child.material.color.setHex(isHit ? 0xffffff : 0xcc1a2a);
+                if(child.material.color) child.material.color.setHex(isHit ? 0xffffff : 0xcc1a2a);
             }
         }
         const label=rp.mesh.userData.label;
@@ -909,12 +927,20 @@ function updateRemotePilots(dt){
 }
 function nearestRemotePilot(maxDist=500){
     let best=null, bestD=maxDist;
-    for(const rp of remotePilots.values()){
+    let bestId='';
+    for(const [id,rp] of remotePilots){
         if(!rp.mesh.visible || (rp.hp ?? C.maxHP) <= 0) continue;
         const d=drone.position.distanceTo(rp.mesh.position);
-        if(d<bestD){best=rp;bestD=d;}
+        if(d<bestD){best=rp;bestD=d;bestId=id;}
     }
-    return best ? { rp:best, d:bestD } : null;
+    return best ? { id:bestId, rp:best, d:bestD } : null;
+}
+function remoteLockInfo(){
+    if(S.gameMode!=='multiplayer' || !lockTarget) return null;
+    for(const [id,rp] of remotePilots){
+        if(rp.mesh===lockTarget && rp.mesh.visible && (rp.hp ?? C.maxHP) > 0) return { id, rp };
+    }
+    return null;
 }
 function applyRemoteHit(id, damage=C.multiplayerDmg){
     const rp=remotePilots.get(id);
@@ -925,7 +951,10 @@ function applyRemoteHit(id, damage=C.multiplayerDmg){
 }
 function sendOnlineBroadcast(event, payload){
     if(!onlineConnected || !onlineChannel) return;
-    try{onlineChannel.send({ type:'broadcast', event, payload }).catch(()=>{});}catch(_){}
+    try{
+        onlineStats.sent++;
+        onlineChannel.send({ type:'broadcast', event, payload }).catch(()=>{});
+    }catch(_){}
 }
 function sendOnlineHit(targetId, pos){
     if(!targetId) return;
@@ -936,6 +965,7 @@ function sendOnlineHit(targetId, pos){
 function receiveOnlineHit(hit){
     if(!hit || hit.target !== onlineClientId || receivedOnlineHits.has(hit.hitId)) return;
     receivedOnlineHits.add(hit.hitId);
+    onlineStats.hits++;
     if(receivedOnlineHits.size > 80) receivedOnlineHits.delete(receivedOnlineHits.values().next().value);
     if(Array.isArray(hit.p)) boom(new THREE.Vector3(hit.p[0], hit.p[1], hit.p[2]), true);
     takeDmg(Number(hit.damage) || C.multiplayerDmg, `${hit.from||'REMOTE'} HIT`);
@@ -980,13 +1010,16 @@ function stopLocalRoom(){
     if(localRoomStorageHandler){window.removeEventListener('storage', localRoomStorageHandler);localRoomStorageHandler=null;}
     localRoomKey='';localRoomConnected=false;
 }
-async function connectOnlineRoom(){
+async function connectOnlineRoom(options={}){
+    const preserveLocal = !!options.preserveLocal;
     if(S.gameMode!=='multiplayer') return;
     await saveOnlineRoom();
     if(!onlineConfig.room){setOnlineStatus('Create or enter a battle code first.', 'bad');notify('CREATE OR JOIN BATTLE','kill-note');return;}
-    if(onlineChannel || localRoomConnected) await disconnectOnlineRoom();
+    if(onlineReconnectTimer){clearTimeout(onlineReconnectTimer);onlineReconnectTimer=null;}
+    if(onlineChannel){try{await onlineChannel.unsubscribe();}catch(_){} onlineChannel=null;onlineConnected=false;}
+    if(!preserveLocal && localRoomConnected) await disconnectOnlineRoom();
     const room = normalizeRoomId(onlineConfig.room);
-    startLocalRoom(room);
+    if(!localRoomConnected) startLocalRoom(room);
     setOnlineStatus(`Connecting Supabase room ${room}...`, 'warn');
     if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus(`Room ${room}: local tab fallback only - Supabase config missing`, 'bad');notify('SUPABASE CONFIG MISSING','kill-note');return;}
     try{
@@ -1005,25 +1038,27 @@ async function connectOnlineRoom(){
         onlineChannel.on('broadcast',{event:'join'},payload=>{
             const join = payload.payload;
             if(!join || join.id===onlineClientId) return;
+            onlineStats.joins++;
             sendOnlineBroadcast('state', onlinePayload());
             notify(`ROOM CONTACT ${join.name||'REMOTE'}`,'ring-note');
         });
         onlineChannel.on('broadcast',{event:'hit'},payload=>receiveOnlineHit(payload.payload));
         onlineChannel.subscribe(async status=>{
             if(status==='SUBSCRIBED'){
-                onlineConnected=true;onlineLastBroadcast=0;onlineLastPresence=0;updateOnlineStatus();notify(`SUPABASE ROOM ${room}`,'ring-note');
+                onlineConnected=true;onlineReconnectAttempts=0;onlineLastBroadcast=0;onlineLastPresence=0;updateOnlineStatus();notify(`SUPABASE ROOM ${room}`,'ring-note');
                 await trackOnlineState(true);
                 sendOnlineBroadcast('join', { id:onlineClientId, name:multiplayerCallsign(), room, ts:Date.now() });
                 for(let i=1;i<=5;i++) setTimeout(()=>trackOnlineState(true).catch(()=>{}), i*250);
             }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-                onlineConnected=false;setOnlineStatus(`Room ${room}: Supabase ${status.toLowerCase()} - local tab fallback only`, 'bad');
+                scheduleOnlineReconnect(status);
             }
         });
-    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus(`Room ${room}: Supabase failed - local tab fallback only`, 'bad');notify('SUPABASE CONNECT FAILED','kill-note');}
+    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;scheduleOnlineReconnect('failed');notify('SUPABASE CONNECT FAILED','kill-note');}
 }
 async function disconnectOnlineRoom(){
+    if(onlineReconnectTimer){clearTimeout(onlineReconnectTimer);onlineReconnectTimer=null;}
     if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
-    stopLocalRoom();onlineChannel=null;onlineConnected=false;onlinePresenceCount=0;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
+    stopLocalRoom();onlineChannel=null;onlineConnected=false;onlinePresenceCount=0;onlineReconnectAttempts=0;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
 }
 function onlinePayload(){
     return { id:onlineClientId, profileId:activeProfileId, name:multiplayerCallsign(), team:'enemy', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), maxHp:C.maxHP, fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
@@ -2536,14 +2571,18 @@ function nearestEnemy(maxDist=220){
     return best;
 }
 function toggleLockTarget(){
-    if(lockTarget && enemies.includes(lockTarget)){
+    if(lockTarget && (enemies.includes(lockTarget) || remoteLockInfo())){
         lockTarget = null; lockFollow = false;
         notify('TARGET LOCK CLEARED','kill-note');
         return;
     }
     const n = nearestEnemy();
     if(n){ lockTarget = n; notify('TARGET LOCK ACQUIRED','ring-note'); }
-    else notify('NO ENEMY IN RANGE','kill-note');
+    else {
+        const remote = nearestRemotePilot(700);
+        if(remote){ lockTarget = remote.rp.mesh; notify(`ENEMY LOCK ${remote.rp.state?.name||'REMOTE'}`,'ring-note'); }
+        else notify('NO ENEMY IN RANGE','kill-note');
+    }
 }
 function cycleLockTarget(dir=1){
     if(enemies.length===0){ notify('NO ENEMIES','kill-note'); return; }
@@ -2559,7 +2598,7 @@ function cycleLockTarget(dir=1){
 }
 function validateLockTarget(){
     if(!lockTarget) return;
-    if(!enemies.includes(lockTarget)){ lockTarget = null; lockFollow = false; notify('TARGET LOST','kill-note'); }
+    if(!enemies.includes(lockTarget) && !remoteLockInfo()){ lockTarget = null; lockFollow = false; notify('TARGET LOST','kill-note'); }
 }
 
 /* Enemy bullets (OBJECT POOL — no runtime allocations) */
@@ -2747,7 +2786,7 @@ function fire(){
     flash.material.opacity=0.8; flash.scale.setScalar(.5+Math.random()*.3); flash.rotation.z=Math.random()*Math.PI;
     altGun=!altGun;
     const wp=gpos.clone(); drone.localToWorld(wp); b.position.copy(wp);
-    if(lockTarget && enemies.includes(lockTarget)){
+    if(lockTarget && (enemies.includes(lockTarget) || remoteLockInfo())){
         _bDir.copy(lockTarget.position).sub(wp).normalize();
     } else {
         _bDir.set(0,0,-1).applyQuaternion(drone.quaternion);
@@ -3054,6 +3093,10 @@ const spdReadout=document.getElementById('speed-readout');
 const altReadout=document.getElementById('alt-readout');
 const ssLat=document.getElementById('ss-lat'),ssLon=document.getElementById('ss-lon'),ssFps=document.getElementById('ss-fps'),ssLink=document.getElementById('ss-link'),ssGps=document.getElementById('ss-gps'),ssMode=document.getElementById('ss-mode'),ssOnline=document.getElementById('ss-online');
 let _fpsFrames=0,_fpsTime=0,_fpsVal=60;
+const $mpDebug=document.createElement('div');
+$mpDebug.id='mp-debug';
+$mpDebug.style.display='none';
+document.body.appendChild($mpDebug);
 
 function drawHeadingTape(hdg){
     if(!hdgCtx) return;
@@ -3556,9 +3599,18 @@ function updHUD(spd,dt=1/60){
     }
     if(ssMode) ssMode.textContent = getModeCfg().label.toUpperCase();
     if(ssOnline){
-        ssOnline.textContent = (onlineConnected || localRoomConnected) ? String(remotePilots.size+1) : 'OFF';
+        ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${remotePilots.size+1}/${onlinePresenceCount||remotePilots.size+1}` : 'OFF';
         ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected && !localRoomConnected);
         ssOnline.classList.toggle('bad-sys', S.gameMode==='multiplayer' && !onlineConfig.url);
+    }
+    if($mpDebug){
+        const active = S.gameMode==='multiplayer' && S.mode==='playing';
+        $mpDebug.style.display = active ? 'block' : 'none';
+        if(active){
+            const age = onlineStats.lastReceiveAt ? `${Math.round((performance.now()-onlineStats.lastReceiveAt)/1000)}s` : 'never';
+            const transport = onlineConnected ? 'SUPABASE' : (localRoomConnected ? 'LOCAL' : 'OFFLINE');
+            $mpDebug.textContent = `MP ${transport} | ROOM ${onlineConfig.room||'--'} | SENT ${onlineStats.sent} | RX ${onlineStats.received} | CONTACTS ${remotePilots.size} | PRES ${onlinePresenceCount||0} | LAST ${age} | ${onlineStats.lastStatus}`;
+        }
     }
     if($flightWarn){
         $flightWarn.textContent = WORLD.warning;
@@ -3609,10 +3661,16 @@ function updHUD(spd,dt=1/60){
         $puInd.style.border='1px solid rgba('+((activePU.color>>16)&255)+','+((activePU.color>>8)&255)+','+(activePU.color&255)+',.4)';
         $puInd.classList.add('show');
     }else{$puInd.classList.remove('show');}
+    const remoteLock = remoteLockInfo();
     if(lockTarget && enemies.includes(lockTarget)){
         const d = drone.position.distanceTo(lockTarget.position);
         const nm = lockTarget.userData?.type?.name || 'enemy';
         $lockInfo.textContent = `LOCK: ${nm.toUpperCase()} • ${Math.round(d)}m${lockFollow?' • FOLLOW':''}`;
+        $lockInfo.classList.add('show');
+    }else if(remoteLock){
+        const d = drone.position.distanceTo(remoteLock.rp.mesh.position);
+        const nm = remoteLock.rp.state?.name || 'REMOTE';
+        $lockInfo.textContent = `LOCK: ENEMY ${nm.toUpperCase()} • ${Math.round(d)}m${lockFollow?' • FOLLOW':''}`;
         $lockInfo.classList.add('show');
     }else{
         const contact = S.gameMode==='multiplayer' ? nearestRemotePilot() : null;
@@ -3816,7 +3874,7 @@ function animate(){
     /* LB digital → throttle bump up */
     if(gpUp) vert = THREE.MathUtils.clamp(vert + 0.7, -1, 1);
 
-    if(lockFollow && lockTarget && enemies.includes(lockTarget)){
+    if(lockFollow && lockTarget && (enemies.includes(lockTarget) || remoteLockInfo())){
         const toTarget = lockTarget.position.clone().sub(drone.position);
         const distToTarget = toTarget.length();
         if(distToTarget > 6){
@@ -4105,7 +4163,7 @@ function animate(){
     if(shakeD>0){shakeD-=dt;camera.position.x+=(Math.random()-.5)*shakeI;camera.position.y+=(Math.random()-.5)*shakeI*.6;}
     // R3 snaps camera instantly behind drone
     if(gpR3){camera.position.copy(idealCam);}
-    if(lockTarget && enemies.includes(lockTarget)){
+    if(lockTarget && (enemies.includes(lockTarget) || remoteLockInfo())){
         const look = lockFollow ? lockTarget.position : drone.position.clone().lerp(lockTarget.position, 0.35);
         camera.lookAt(look);
     } else {
