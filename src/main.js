@@ -603,7 +603,8 @@ let supabaseModulePromise = null;
 let supabaseClient = null;
 let onlineChannel = null;
 let onlineConnected = false;
-let onlineLastTrack = 0;
+let onlineLastBroadcast = 0;
+let onlineLastPresence = 0;
 let onlineConfig = {...ONLINE_DEFAULTS};
 const onlineClientId = `pilot_${(globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`).replace(/[^a-zA-Z0-9_-]/g,'')}`;
 const onlineCallsign = `RAVEN-${hashString(onlineClientId).toString(36).slice(-3).toUpperCase()}`;
@@ -613,9 +614,6 @@ let localRoomChannel = null;
 let localRoomKey = '';
 let localRoomConnected = false;
 let localRoomStorageHandler = null;
-let wsRelaySocket = null;
-let wsRelayConnected = false;
-let wsRelayQueue = [];
 function normalizeRoomId(room){
     return String(room||'').toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24);
 }
@@ -672,7 +670,7 @@ function multiplayerCallsign(){
 function setOnlineStatus(text, kind='warn'){
     const el=document.getElementById('online-status');
     if(el){el.textContent=text;el.classList.remove('online-good','online-warn','online-bad');el.classList.add(`online-${kind}`);}
-    if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected || wsRelayConnected) ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
+    if(ssOnline){ssOnline.textContent = (onlineConnected || localRoomConnected) ? `${remotePilots.size+1}` : 'OFF';ssOnline.classList.toggle('warn-sys', kind==='warn');ssOnline.classList.toggle('bad-sys', kind==='bad');}
 }
 async function loadOnlineConfig(){
     const saved = await dbGetSetting('onlineConfig');
@@ -728,7 +726,8 @@ async function copyOnlineInvite(){
     }
 }
 function getOnlineStateLabel(){
-    if(onlineConnected || localRoomConnected || wsRelayConnected) return `Room ${onlineConfig.room}: ${remotePilots.size+1} pilot(s)`;
+    if(onlineConnected) return `Room ${onlineConfig.room}: ${remotePilots.size+1} pilot(s) via Supabase`;
+    if(localRoomConnected) return `Room ${onlineConfig.room}: local tab fallback only`;
     return onlineConfig.room ? `Ready. Battle ${onlineConfig.room}` : 'Ready. Create or join a battle.';
 }
 async function checkOnlineRoomPresence(room){
@@ -754,7 +753,7 @@ async function checkOnlineRoomPresence(room){
     return activePilots;
 }
 function updateOnlineStatus(){
-    if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), 'good'); return; }
+    if(!onlineConnected){ setOnlineStatus(getOnlineStateLabel(), localRoomConnected ? 'warn' : 'good'); return; }
     const remoteCount = remotePilots.size;
     const txt = remoteCount ? `Room ${onlineConfig.room}: ${remoteCount+1} pilot(s) - ${remoteCount} battle contact(s)` : `Room ${onlineConfig.room}: waiting for another pilot`;
     setOnlineStatus(txt, remoteCount ? 'good' : 'warn');
@@ -948,14 +947,6 @@ function sendLocalRoomMessage(type, payload){
         try{localRoomChannel?.postMessage(msg);}catch(_){}
         try{localStorage.setItem(localRoomKey, JSON.stringify(msg));}catch(_){}
     }
-    if(wsRelayConnected){
-        const json = JSON.stringify(msg);
-        if(wsRelaySocket && wsRelaySocket.readyState === WebSocket.OPEN){
-            try{wsRelaySocket.send(json);}catch(_){}
-        } else {
-            wsRelayQueue.push(json);
-        }
-    }
 }
 function startLocalRoom(room){
     stopLocalRoom();
@@ -978,74 +969,29 @@ function stopLocalRoom(){
     if(localRoomStorageHandler){window.removeEventListener('storage', localRoomStorageHandler);localRoomStorageHandler=null;}
     localRoomKey='';localRoomConnected=false;
 }
-function startWsRelay(room){
-    stopWsRelay();
-    const normalizedRoom = normalizeRoomId(room);
-    if(!normalizedRoom) return;
-    try{
-        wsRelaySocket = new WebSocket('wss://ws.ifelse.io/');
-        wsRelaySocket.onopen = () => {
-            wsRelayConnected = true;
-            console.log('[ws-relay] connected');
-            while(wsRelayQueue.length) wsRelaySocket.send(wsRelayQueue.shift());
-        };
-        wsRelaySocket.onmessage = e => {
-            try{
-                const msg = JSON.parse(e.data);
-                if(msg && msg.room === normalizedRoom && msg.source !== onlineClientId){
-                    handleLocalRoomMessage(msg);
-                }
-            }catch(_){}
-        };
-        wsRelaySocket.onclose = () => {
-            wsRelayConnected = false;
-            console.log('[ws-relay] closed, reconnecting...');
-            setTimeout(()=>startWsRelay(room), 3000);
-        };
-        wsRelaySocket.onerror = () => {
-            wsRelayConnected = false;
-        };
-    }catch(e){console.warn('[ws-relay] failed',e);}
-}
-function stopWsRelay(){
-    if(wsRelaySocket){try{wsRelaySocket.close();}catch(_){} wsRelaySocket=null;}
-    wsRelayConnected = false;
-    wsRelayQueue = [];
-}
-function sendWsRelayMessage(type, payload){
-    const msg = localRoomMessage(onlineConfig.room, type, payload);
-    const json = JSON.stringify(msg);
-    if(wsRelayConnected && wsRelaySocket && wsRelaySocket.readyState === WebSocket.OPEN){
-        try{wsRelaySocket.send(json);}catch(_){}
-    } else {
-        wsRelayQueue.push(json);
-    }
-}
 async function connectOnlineRoom(){
     if(S.gameMode!=='multiplayer') return;
     await saveOnlineRoom();
     if(!onlineConfig.room){setOnlineStatus('Create or enter a battle code first.', 'bad');notify('CREATE OR JOIN BATTLE','kill-note');return;}
-    if(onlineChannel || localRoomConnected || wsRelayConnected) await disconnectOnlineRoom();
+    if(onlineChannel || localRoomConnected) await disconnectOnlineRoom();
     const room = normalizeRoomId(onlineConfig.room);
     startLocalRoom(room);
-    startWsRelay(room);
-    updateOnlineStatus();
-    await trackOnlineState(true);
-    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus(`Room ${room}: local+relay battle ready`, 'warn');notify('LOCAL ROOM READY','ring-note');return;}
+    setOnlineStatus(`Connecting Supabase room ${room}...`, 'warn');
+    if(!onlineConfig.url||!onlineConfig.key){setOnlineStatus(`Room ${room}: local tab fallback only - Supabase config missing`, 'bad');notify('SUPABASE CONFIG MISSING','kill-note');return;}
     try{
         if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
         const { createClient } = await supabaseModulePromise;
         if(!supabaseClient) supabaseClient = createClient(onlineConfig.url, onlineConfig.key, { auth:{ persistSession:false, autoRefreshToken:false } });
-        onlineChannel = supabaseClient.channel(`drone-simulator:${room}`, { config:{ presence:{ key: onlineClientId } } });
+        onlineChannel = supabaseClient.channel(`drone-simulator:${room}`, { config:{ broadcast:{ self:false }, presence:{ key: onlineClientId } } });
         onlineChannel.on('presence',{event:'sync'},()=>{
             const state=onlineChannel.presenceState();
             const seen=new Set();
             for(const [id,rows] of Object.entries(state)){
                 if(id===onlineClientId) continue;
                 const latest=rows?.[rows.length-1];
-                if(latest?.p&&latest?.q){seen.add(id);ensureRemotePilot(id,latest);}
+                if(latest){seen.add(id);if(latest.p&&latest.q) ensureRemotePilot(id,latest);}
             }
-            if(!localRoomConnected && !wsRelayConnected) for(const id of remotePilots.keys()) if(!seen.has(id)) removeRemotePilot(id);
+            for(const id of [...remotePilots.keys()]) if(!seen.has(id)) removeRemotePilot(id);
             updateOnlineStatus();
         });
         onlineChannel.on('broadcast',{event:'state'},payload=>{
@@ -1054,29 +1000,32 @@ async function connectOnlineRoom(){
         onlineChannel.on('broadcast',{event:'hit'},payload=>receiveOnlineHit(payload.payload));
         onlineChannel.subscribe(async status=>{
             if(status==='SUBSCRIBED'){
-                onlineConnected=true;updateOnlineStatus();notify(`ONLINE ROOM ${room}`,'ring-note');await trackOnlineState(true);
+                onlineConnected=true;onlineLastBroadcast=0;onlineLastPresence=0;updateOnlineStatus();notify(`SUPABASE ROOM ${room}`,'ring-note');await trackOnlineState(true);
             }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-                onlineConnected=false;setOnlineStatus(`Room ${room}: local+relay ready, realtime ${status.toLowerCase()}`, 'warn');
+                onlineConnected=false;setOnlineStatus(`Room ${room}: Supabase ${status.toLowerCase()} - local tab fallback only`, 'bad');
             }
         });
-    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus(`Room ${room}: local+relay battle ready`, 'warn');notify('LOCAL ROOM READY','ring-note');}
+    }catch(e){console.warn('Online connect failed',e);onlineConnected=false;setOnlineStatus(`Room ${room}: Supabase failed - local tab fallback only`, 'bad');notify('SUPABASE CONNECT FAILED','kill-note');}
 }
 async function disconnectOnlineRoom(){
     if(onlineChannel){try{await onlineChannel.untrack();await onlineChannel.unsubscribe();}catch(_){}}
-    stopLocalRoom();stopWsRelay();onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
+    stopLocalRoom();onlineChannel=null;onlineConnected=false;cleanupRemotePilots();setOnlineStatus(getOnlineStateLabel(), 'good');
 }
 function onlinePayload(){
     return { id:onlineClientId, profileId:activeProfileId, name:multiplayerCallsign(), team:'enemy', persona:selectedPersona, aircraft:controlCfg.vehicleMode, hp:Math.round(S.hp), maxHp:C.maxHP, fuel:Math.round(WORLD.fuel), mode:S.gameMode, p:[drone.position.x,drone.position.y,drone.position.z], q:[drone.quaternion.x,drone.quaternion.y,drone.quaternion.z,drone.quaternion.w], v:[vel.x,vel.y,vel.z], ts:Date.now() };
 }
 async function trackOnlineState(force=false){
-    if(S.gameMode!=='multiplayer' || (!localRoomConnected && !wsRelayConnected && (!onlineConnected||!onlineChannel))) return;
+    if(S.gameMode!=='multiplayer' || (!localRoomConnected && (!onlineConnected||!onlineChannel))) return;
     const now=performance.now();
-    if(!force&&now-onlineLastTrack<120) return;
-    onlineLastTrack=now;
+    if(!force&&now-onlineLastBroadcast<100) return;
+    onlineLastBroadcast=now;
     const payload=onlinePayload();
     sendLocalRoomMessage('state', payload);
     if(onlineConnected&&onlineChannel){
-        try{await onlineChannel.track(payload);onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});}catch(e){console.warn('Online track failed',e);}
+        try{
+            onlineChannel.send({type:'broadcast',event:'state',payload}).catch(()=>{});
+            if(force || now-onlineLastPresence>2000){onlineLastPresence=now;await onlineChannel.track(payload);}
+        }catch(e){console.warn('Online track failed',e);}
     }
 }
 
@@ -2794,7 +2743,7 @@ function fire(){
     sndLaser(); vib(45,.1,.18);
 }
 function findRemoteBulletHit(b){
-    if(S.gameMode !== 'multiplayer' || (!onlineConnected && !localRoomConnected && !wsRelayConnected)) return null;
+    if(S.gameMode !== 'multiplayer' || (!onlineConnected && !localRoomConnected)) return null;
     let best = null;
     let bestDist = Infinity;
     for(const [id,rp] of remotePilots){
@@ -3593,8 +3542,8 @@ function updHUD(spd,dt=1/60){
     }
     if(ssMode) ssMode.textContent = getModeCfg().label.toUpperCase();
     if(ssOnline){
-        ssOnline.textContent = (onlineConnected || localRoomConnected || wsRelayConnected) ? String(remotePilots.size+1) : 'OFF';
-        ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected && !localRoomConnected && !wsRelayConnected);
+        ssOnline.textContent = (onlineConnected || localRoomConnected) ? String(remotePilots.size+1) : 'OFF';
+        ssOnline.classList.toggle('warn-sys', S.gameMode==='multiplayer' && !onlineConnected && !localRoomConnected);
         ssOnline.classList.toggle('bad-sys', S.gameMode==='multiplayer' && !onlineConfig.url);
     }
     if($flightWarn){

@@ -28,7 +28,7 @@ This project is playable today, but it is still a simulator-game prototype. The 
 
 ## Free Online Multiplayer Setup
 
-GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime presence**. It gives Online Battle shared two-player rooms and synced remote aircraft without paying for a server.
+GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime**: Broadcast carries fast drone state and hit events, while Presence tracks who is in the room.
 
 The app is already configured with the project's public Supabase key.
 
@@ -39,7 +39,7 @@ The app is already configured with the project's public Supabase key.
 5. Both players launch the same battle room.
 6. Both players see synced remote aircraft, HUD online count, and radar/minimap contacts.
 
-Current Online Battle syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and room presence as remote aircraft. Combat hit validation is still client-side prototype logic and should become authoritative later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
+Current Online Battle syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and hit events as remote aircraft. Combat hit validation is still client-side prototype logic and should become authoritative later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
 
 ## Controls
 

@@ -1,14 +1,15 @@
 # Free Online Battle Setup
 
-The project is hosted on GitHub Pages, which is free static hosting. Static hosting cannot run a WebSocket game server. The free solution used here is Supabase Realtime presence.
+The project is hosted on GitHub Pages, which is free static hosting. Static hosting cannot run a WebSocket game server. The free solution used here is Supabase Realtime: Broadcast for fast gameplay packets and Presence for room membership.
 
 ## What Works Now
 
 - Create Battle, Join Battle, and Copy Invite in the launcher/game menu.
 - Join Battle verifies that Supabase Realtime is reachable for the code and reports whether any pilots are currently present.
 - Project Supabase URL and publishable key are already configured in the frontend.
-- Remote pilots appear as blue wireframe aircraft and cyan radar/minimap contacts.
-- Presence sync includes callsign, persona, aircraft, position, rotation, velocity, hull, fuel, and selected mode.
+- Remote pilots appear as red enemy aircraft with HUD labels and radar/minimap contacts.
+- Broadcast sync includes callsign, persona, aircraft, position, rotation, velocity, hull, fuel, selected mode, and hit events.
+- Presence tracks room membership and slow identity; it is not used as the high-frequency movement channel.
 
 ## Player Flow
 
@@ -26,8 +27,8 @@ The project is hosted on GitHub Pages, which is free static hosting. Static host
 2. **Copy Invite** builds a URL containing `mode=multiplayer`, the selected aircraft, and `room=DRN-482K`.
 3. **Join Battle** connects briefly to the Supabase Realtime channel for that room code. A successful connection means the code is valid and reachable.
 4. **Active pilot detection** reads Realtime Presence state. If presence rows exist, the battle room is active. If no rows exist, the code is still valid but player two may be first into the room.
-5. **Launch** opens `game.html` with the same battle code. The game connects to `drone-simulator:<room>` and starts broadcasting the local aircraft state.
-6. **In-game visibility** uses both Presence sync and broadcast state. Remote players appear as wireframe aircraft, labels, HUD online count, and radar/minimap contacts.
+5. **Launch** opens `game.html` with the same battle code. The game connects to `drone-simulator:<room>` and starts broadcasting the local aircraft state at gameplay rate.
+6. **In-game visibility** uses Broadcast state for movement and Presence for membership cleanup. Remote players appear as enemy aircraft, labels, HUD online count, and radar/minimap contacts.
 7. **Future improvement** should add a lobby panel before launch, showing callsigns and ready status before entering the 3D world.
 
 ## Why Supabase
@@ -35,7 +36,7 @@ The project is hosted on GitHub Pages, which is free static hosting. Static host
 - Has a generous free tier.
 - Works from GitHub Pages because the browser connects directly to Supabase Realtime.
 - Does not require running or paying for a custom Node server.
-- Good enough for ghost/co-op presence and early prototype testing.
+- Good enough for prototype same-room aircraft sync and client-side battle testing.
 
 ## Limits
 
