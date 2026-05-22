@@ -8,8 +8,10 @@ The project is hosted on GitHub Pages, which is free static hosting. Static host
 - Join Battle verifies that Supabase Realtime is reachable for the code and reports whether any pilots are currently present.
 - Project Supabase URL and publishable key are already configured in the frontend.
 - Remote pilots appear as red enemy aircraft with HUD labels and radar/minimap contacts.
+- In-game Battle Link panel shows room transport, packet counts, last received packet, and active enemy contacts.
 - Broadcast sync includes callsign, persona, aircraft, position, rotation, velocity, hull, fuel, selected mode, and hit events.
 - Presence tracks room membership and slow identity; it is not used as the high-frequency movement channel.
+- Battle profile records stay local by default and can optionally sync through the Supabase tables documented in `docs/SUPABASE_BATTLE_PROFILE_SETUP.md`.
 
 ## Player Flow
 

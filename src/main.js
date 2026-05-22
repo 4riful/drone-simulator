@@ -37,6 +37,28 @@ const C = {
     maxHP: 150, bldgDmg: 15, enemyDmg: 12, multiplayerDmg: 18, orbHeal: 35,
     ringPts: 100, killPts: 250,
 };
+const CITY_MAP = {
+    name: 'Andromeda Harbor Grid',
+    waterways: [
+        { id:'main-river', name:'Kortoa River', axis:'x', offset:-0.18, width:34, lengthMul:1.48, color:'#2a4850' },
+        { id:'north-canal', name:'North Canal', axis:'z', offset:0.18, width:22, lengthMul:0.78, color:'#1e4355' },
+    ],
+    bridges: [
+        { id:'kortoa-friendship-4', name:'4th China Friendship Bridge', waterway:'main-river', xOffset:0.09 },
+    ],
+    districts: [
+        { id:'command-base', name:'Command Base', x:-0.38, z:0.34, radius:42, color:0x63ff9c },
+        { id:'downtown', name:'Downtown Core', x:-0.16, z:-0.02, radius:58, color:0x26d9ff },
+        { id:'riverfront', name:'Kortoa Riverfront', x:0.18, z:-0.24, radius:46, color:0xffb84d },
+        { id:'industrial', name:'Industrial Yard', x:0.34, z:0.22, radius:50, color:0xff5f5f },
+    ],
+    landmarks: [
+        { id:'airstrip', name:'Forward Airstrip', x:-0.36, z:0.38, w:58, d:10, color:0x5b6468 },
+        { id:'harbor-yard', name:'Harbor Yard', x:0.28, z:0.44, w:58, d:28, color:0x6b6258 },
+    ],
+    harbor: { offset:0.5, depth:260 },
+};
+/* Replace CITY_MAP later with user-provided districts, waterways, bridges, and landmarks. */
 const S = { mode:'menu', gameMode:'single', hp:C.maxHP, score:0, kills:0, rings:0, dist:0, boost:100, boosting:false, invTimer:0 };
 const WORLD = { fuel:100, windSpeed:0, windDir:0, missionSec:0, batteryV:25.2, signal:100, gps:'3D', airDensity:1, gust:0, turbulence:0, warning:'' };
 let activeProfileId = 'pilot_guest';
@@ -69,6 +91,15 @@ const PERSONAS = {
     test: { label:'Test Pilot', rank:'X-1', badge:'TEST', brief:'Experimental airframe evaluator. Better speed envelope, rougher turbulence exposure.', signalBonus:2, scoreMul:1.0, fuelMul:1.02 },
     instructor: { label:'Instructor', rank:'IP-1', badge:'TRAIN', brief:'Training-focused operator. Smoother missions and stronger learning profile.', signalBonus:5, scoreMul:0.9, fuelMul:0.92 }
 };
+function activeCallsign(){
+    if(S.gameMode==='multiplayer') return multiplayerCallsign();
+    return String(activeProfile?.name || 'Viper-1').trim() || 'Viper-1';
+}
+function expandRadioLine(line){
+    const call = activeCallsign().toUpperCase();
+    const wing = S.gameMode==='multiplayer' ? 'online wing' : 'flight';
+    return String(line||'').replaceAll('{CALL}', call).replaceAll('{WING}', wing);
+}
 const CONTROL_DEFAULT = {
     deadzone: 0.08,
     expo: 0.35,
@@ -105,6 +136,7 @@ const VEHICLE_PROFILES = {
 };
 
 let gameDB = null;
+let cloudSyncState = { enabled:false, ok:false, last:'local only', syncedRuns:0 };
 function dbReqToPromise(req){
     return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
 }
@@ -155,6 +187,60 @@ async function dbAddRun(run){
     tx.objectStore('runs').add(run);
     await dbTxDone(tx);
 }
+function publicProfileId(profile){
+    return `web_${hashString(String(profile?.id || profile?.name || 'pilot')).toString(36)}`;
+}
+function profilePayload(profile){
+    return {
+        id: publicProfileId(profile),
+        local_id: profile.id,
+        callsign: profile.name,
+        persona: profile.persona || 'recon',
+        preferred_mode: profile.preferredMode || 'single',
+        total_flights: profile.totalFlights || 0,
+        total_score: profile.totalScore || 0,
+        best_score: profile.bestScore || 0,
+        total_distance: profile.totalDistance || 0,
+        total_kills: profile.totalKills || 0,
+        total_rings: profile.totalRings || 0,
+        total_time: profile.totalTime || 0,
+        last_played: new Date(profile.lastPlayed || Date.now()).toISOString(),
+        updated_at: new Date().toISOString()
+    };
+}
+function runPayload(run, profile){
+    return {
+        profile_id: publicProfileId(profile || activeProfile),
+        callsign: profile?.name || activeProfile?.name || 'Viper-1',
+        score: Math.round(run.score || 0),
+        distance: Math.round(run.dist || 0),
+        kills: Math.round(run.kills || 0),
+        rings: Math.round(run.rings || 0),
+        game_mode: run.gameMode || 'single',
+        persona: run.persona || selectedPersona || 'recon',
+        version: run.version || GAME_META.version,
+        played_at: new Date(run.ts || Date.now()).toISOString()
+    };
+}
+async function syncBattleProfileToCloud(profile=activeProfile, run=null){
+    if(!profile || !ONLINE_DEFAULTS.url || !ONLINE_DEFAULTS.key) return false;
+    try{
+        if(!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
+        const { createClient } = await supabaseModulePromise;
+        const client = supabaseClient || createClient(ONLINE_DEFAULTS.url, ONLINE_DEFAULTS.key, { auth:{ persistSession:false, autoRefreshToken:false } });
+        const profileResult = await client.from('battle_profiles').upsert(profilePayload(profile), { onConflict:'id' });
+        if(profileResult.error) throw profileResult.error;
+        if(run){
+            const runResult = await client.from('battle_runs').insert(runPayload(run, profile));
+            if(runResult.error) throw runResult.error;
+        }
+        cloudSyncState = { enabled:true, ok:true, last:`cloud synced ${new Date().toLocaleTimeString()}`, syncedRuns:cloudSyncState.syncedRuns + (run?1:0) };
+        return true;
+    }catch(err){
+        cloudSyncState = { ...cloudSyncState, enabled:true, ok:false, last:`cloud sync pending: ${err?.message || 'setup required'}` };
+        return false;
+    }
+}
 async function dbTopRuns(limit=5, profileId=null){
     if(!gameDB){
         const raw = localStorage.getItem('xettas.runs');
@@ -167,6 +253,19 @@ async function dbTopRuns(limit=5, profileId=null){
     const rows = await dbReqToPromise(req);
     const filtered = profileId ? rows.filter(r=>r.profileId===profileId) : rows;
     return filtered.sort((a,b)=>b.score-a.score).slice(0, limit);
+}
+async function dbRecentRuns(limit=5, profileId=null){
+    let rows = [];
+    if(!gameDB){
+        const raw = localStorage.getItem('xettas.runs');
+        rows = raw ? JSON.parse(raw) : [];
+    }else{
+        const tx = gameDB.transaction('runs','readonly');
+        const req = tx.objectStore('runs').getAll();
+        rows = await dbReqToPromise(req);
+    }
+    const filtered = profileId ? rows.filter(r=>r.profileId===profileId) : rows;
+    return filtered.sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0, limit);
 }
 async function dbGetProfiles(){
     if(!gameDB){
@@ -403,54 +502,54 @@ const _radioBuf=(()=>{const dur=.8,len=Math.ceil(actx.sampleRate*dur),buf=actx.c
 let radioPlaying=false;
 const RADIO_LINES = {
     kill: [
-        'Viper-1, splash one hostile, good effect on target.',
-        'Copy that, target neutralized. Good kill Viper.',
-        'Hostile down. TOC confirms kill. Good work.',
-        'Direct hit. Enemy drone destroyed. BDA confirmed.',
-        'Tango down. Reaper has eyes on wreckage.',
+        '{CALL}, splash one hostile. Good effect on target.',
+        'Copy {CALL}, target neutralized. BDA confirms kill.',
+        'Hostile down. TOC confirms kill for {CALL}.',
+        'Direct hit, {CALL}. Enemy drone destroyed.',
+        '{CALL}, Reaper feed has eyes on the wreckage.',
     ],
     damage: [
-        'Viper-1 taking fire! Evasive maneuvers!',
+        '{CALL} taking fire. Break and mask behind cover.',
         'Warning, incoming! Break break break!',
-        'We are hit, we are hit! Checking systems...',
-        'Damage sustained. All operators check status.',
-        'SAM launch detected! Deploying countermeasures!',
+        '{CALL} is hit. Checking propulsion and link status.',
+        'Damage sustained. {WING} check hull and battery state.',
+        'Launch warning. {CALL}, descend or use buildings for cover.',
     ],
     lowFuel: [
-        'Viper-1, bingo fuel. RTB recommended.',
-        'Fuel state critical. Requesting vector to base.',
-        'TOC, Viper-1 is Winchester on fuel. Need immediate RTB.',
+        '{CALL}, bingo fuel. Return to base recommended.',
+        '{CALL}, fuel state critical. Request vector to recovery.',
+        'TOC, {CALL} is low fuel. Immediate recovery advised.',
     ],
     objective: [
-        'Mission objective complete. Proceed to next waypoint.',
-        'Good copy Viper. Target area secured. Moving on.',
-        'All stations, objective achieved. Pushing forward.',
+        '{CALL}, objective complete. Proceed to next waypoint.',
+        'Good copy {CALL}. Target area secured. Moving on.',
+        'All stations, {CALL} reports objective achieved.',
     ],
     ring: [
-        'Waypoint confirmed. On course.',
-        'Checkpoint. Good positioning Viper.',
-        'Copy, waypoint cleared. Maintaining altitude.',
+        '{CALL}, waypoint confirmed. Continue on course.',
+        'Checkpoint logged. Good positioning, {CALL}.',
+        'Copy {CALL}, waypoint cleared. Maintain safe altitude.',
     ],
     startup: [
-        'TOC, Viper-1 is airborne. Proceeding to AO.',
-        'All stations, Viper-1 is wheels up. Time on station: unlimited.',
-        'Viper-1 entering theater. Sensors active, weapons hot.',
+        'TOC, {CALL} is airborne. Proceeding to area of operations.',
+        'All stations, {CALL} is wheels up. Sensors online.',
+        '{CALL} entering theater. Link active, weapons hot.',
     ],
     lowHP: [
-        'Viper-1 is critical! Multiple system failures!',
-        'Mayday mayday, Viper-1 going down! Heavy damage!',
+        '{CALL} is critical. Multiple system failures.',
+        'Mayday, mayday, {CALL} has heavy damage.',
     ],
     combo: [
-        'Multiple kills confirmed! Viper is on a streak!',
-        'Splash two! Keep it up Viper!',
+        'Multiple kills confirmed. {CALL} is on a streak.',
+        'Splash two. Keep pressure on them, {CALL}.',
     ],
     periodic: [
-        'TOC, Viper-1 on station. AO looks hot.',
-        'Scanning sector. Multiple signatures detected.',
-        'Viper-1, maintain altitude, thermals building.',
-        'Copy command, holding pattern over target area.',
-        'ISR sweep complete. Hostile movements confirmed.',
-        'Weather advisory — sandstorm building to the west.',
+        'TOC, {CALL} on station. Area looks active.',
+        '{CALL}, scan sector. Multiple signatures possible.',
+        '{CALL}, maintain altitude. Thermals are building.',
+        'Copy command, {CALL} holding pattern over target area.',
+        'ISR sweep complete. Hostile movement remains possible.',
+        '{CALL}, weather advisory. Gust front building west.',
     ],
 };
 let lastRadioTime=0, radioQueue=[], periodicTimer=0;
@@ -526,7 +625,7 @@ function radioSpeak(category){
     if(now-lastRadioTime<3000) return;
     const lines=RADIO_LINES[category];
     if(!lines||!lines.length) return;
-    const text=lines[Math.floor(Math.random()*lines.length)];
+    const text=expandRadioLine(lines[Math.floor(Math.random()*lines.length)]);
     lastRadioTime=now;
     radioPlaying=true;
     const msgDur=1500+text.length*50;
@@ -1243,6 +1342,28 @@ function makeWaterTex(tint='#0a1828'){
     return tex;
 }
 
+function makeMapLabelTex(title, subtitle='', tint='#8fd8ff'){
+    const cv=document.createElement('canvas'); cv.width=768; cv.height=192;
+    const cx=cv.getContext('2d');
+    cx.clearRect(0,0,cv.width,cv.height);
+    cx.fillStyle='rgba(4,12,24,.72)'; cx.fillRect(0,0,cv.width,cv.height);
+    cx.strokeStyle=tint; cx.lineWidth=4; cx.strokeRect(8,8,cv.width-16,cv.height-16);
+    cx.font='bold 44px "Courier New", monospace'; cx.textAlign='center'; cx.textBaseline='middle';
+    cx.shadowColor=tint; cx.shadowBlur=18; cx.fillStyle=tint; cx.fillText(title.toUpperCase(),cv.width/2,78);
+    if(subtitle){ cx.shadowBlur=8; cx.font='bold 22px "Courier New", monospace'; cx.fillStyle='rgba(220,245,255,.9)'; cx.fillText(subtitle.toUpperCase(),cv.width/2,130); }
+    cx.shadowBlur=0;
+    const tex=new THREE.CanvasTexture(cv); tex.minFilter=THREE.LinearFilter; tex.magFilter=THREE.LinearFilter;
+    return tex;
+}
+
+function addMapLabel(title, subtitle, position, rotationY=0, width=34){
+    const tex=makeMapLabelTex(title, subtitle);
+    const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false});
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,width/4),mat);
+    mesh.position.copy(position); mesh.rotation.y=rotationY; scene.add(mesh);
+    return mesh;
+}
+
 function generateCity() {
     const blocks=Math.floor(C.citySize/C.blockSize), half=blocks/2;
 
@@ -1258,11 +1379,26 @@ function generateCity() {
     const oceanTex=makeWaterTex('#1a3848');
     const waterMatR=new THREE.MeshStandardMaterial({color:0x2a5058,map:riverTex,roughness:.15,metalness:.5,transparent:true,opacity:.8});
     const waterMatO=new THREE.MeshStandardMaterial({color:0x1a3848,map:oceanTex,roughness:.2,metalness:.45,transparent:true,opacity:.75});
-    const riverW=34;
-    const riverZ=-C.citySize*0.18;
+    const riverCfg=CITY_MAP.waterways.find(w=>w.id==='main-river')||CITY_MAP.waterways[0];
+    const canalCfg=CITY_MAP.waterways.find(w=>w.id==='north-canal')||CITY_MAP.waterways[1];
+    const bridgeCfg=CITY_MAP.bridges.find(b=>b.id==='kortoa-friendship-4')||CITY_MAP.bridges[0];
+    const riverW=riverCfg.width;
+    const riverZ=C.citySize*riverCfg.offset;
     const river=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+240,riverW),waterMatR);
     river.rotation.x=-Math.PI/2; river.position.set(0,-0.09,riverZ); scene.add(river);
     waterAnims.push({tex:riverTex,sx:0.008,sy:0.001});
+
+    const canalW=canalCfg.width;
+    const canalX=C.citySize*canalCfg.offset;
+    const canal=new THREE.Mesh(new THREE.PlaneGeometry(canalW,C.citySize*.86),waterMatR);
+    canal.rotation.x=-Math.PI/2; canal.position.set(canalX,-0.085,C.citySize*.05); scene.add(canal);
+    addMapLabel(riverCfg.name||'Kortoa River','Main waterway',new THREE.Vector3(-C.citySize*.28,7.2,riverZ-10),0,34);
+    function cityWaterAt(x,z,pad=0){
+        const inRiver = Math.abs(z-riverZ) < riverW/2 + pad;
+        const inCanal = Math.abs(x-canalX) < canalW/2 + pad && z > -C.citySize*.38 && z < C.citySize*.48;
+        const inHarbor = z > C.citySize*.5 - pad;
+        return inRiver || inCanal || inHarbor;
+    }
 
     const coast=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+420,260),waterMatO);
     coast.rotation.x=-Math.PI/2; coast.position.set(0,-0.11,C.citySize/2+120); scene.add(coast);
@@ -1273,6 +1409,10 @@ function generateCity() {
     embL.position.set(0,0.45,riverZ-riverW/2); scene.add(embL);
     const embR=new THREE.Mesh(new THREE.BoxGeometry(C.citySize+220,1.2,2),embankMat);
     embR.position.set(0,0.45,riverZ+riverW/2); scene.add(embR);
+    [-1,1].forEach(side=>{
+        const emb=new THREE.Mesh(new THREE.BoxGeometry(2,1.2,C.citySize*.86),embankMat);
+        emb.position.set(canalX+side*(canalW/2),0.45,C.citySize*.05); scene.add(emb);
+    });
 
     /* Road asphalt texture */
     const rdCv=document.createElement('canvas');rdCv.width=128;rdCv.height=128;
@@ -1297,15 +1437,54 @@ function generateCity() {
 
     /* Bridge decks where N/S roads cross the river */
     const bridgeMat=new THREE.MeshStandardMaterial({color:0x787068,roughness:.78,metalness:.15});
+    const namedBridgeX=C.citySize*(bridgeCfg?.xOffset ?? 0.09);
+    let namedBridge=null;
+    let namedBridgeDist=Infinity;
     for(let i=0;i<=blocks;i++){
         const x=(i-half)*C.blockSize;
         const bridge=new THREE.Mesh(new THREE.BoxGeometry(8,0.65,riverW+5),bridgeMat);
         bridge.position.set(x,0.42,riverZ); scene.add(bridge);
+        const d=Math.abs(x-namedBridgeX);
+        if(d<namedBridgeDist){ namedBridgeDist=d; namedBridge=bridge; }
         const railMat=new THREE.MeshStandardMaterial({color:0x909088,roughness:.55,metalness:.4});
         const railL=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.4,riverW+5),railMat);
         railL.position.set(x-3.75,0.9,riverZ); scene.add(railL);
         const railR=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.4,riverW+5),railMat);
         railR.position.set(x+3.75,0.9,riverZ); scene.add(railR);
+    }
+    if(namedBridge){
+        addMapLabel(bridgeCfg?.name||'4th China Friendship Bridge',riverCfg.name||'Kortoa River',new THREE.Vector3(namedBridge.position.x,5.8,riverZ+riverW*.8),0,42);
+    }
+
+    /* Bridge decks where E/W roads cross the canal */
+    for(let i=0;i<=blocks;i++){
+        const z=(i-half)*C.blockSize;
+        if(z < -C.citySize*.38 || z > C.citySize*.48) continue;
+        const bridge=new THREE.Mesh(new THREE.BoxGeometry(canalW+5,0.65,8),bridgeMat);
+        bridge.position.set(canalX,0.42,z); scene.add(bridge);
+        const railMat=new THREE.MeshStandardMaterial({color:0x909088,roughness:.55,metalness:.4});
+        const railL=new THREE.Mesh(new THREE.BoxGeometry(canalW+5,0.4,0.2),railMat);
+        railL.position.set(canalX,0.9,z-3.75); scene.add(railL);
+        const railR=new THREE.Mesh(new THREE.BoxGeometry(canalW+5,0.4,0.2),railMat);
+        railR.position.set(canalX,0.9,z+3.75); scene.add(railR);
+    }
+
+    /* Map-driven districts and landmarks. These are the placeholders that a supplied user map can replace. */
+    const districtRingMat=new THREE.MeshBasicMaterial({color:0x63ff9c,transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false});
+    for(const d of CITY_MAP.districts){
+        const x=C.citySize*d.x, z=C.citySize*d.z;
+        const ring=new THREE.Mesh(new THREE.RingGeometry(d.radius*.92,d.radius,48),districtRingMat.clone());
+        ring.material.color.setHex(d.color||0x63ff9c); ring.rotation.x=-Math.PI/2; ring.position.set(x,.04,z); scene.add(ring);
+        addMapLabel(d.name,'district',new THREE.Vector3(x,6.8,z),0,30);
+    }
+    for(const lm of CITY_MAP.landmarks){
+        const x=C.citySize*lm.x, z=C.citySize*lm.z;
+        const pad=new THREE.Mesh(new THREE.BoxGeometry(lm.w,.22,lm.d),new THREE.MeshStandardMaterial({color:lm.color||0x606870,roughness:.82,metalness:.12}));
+        pad.position.set(x,.16,z); scene.add(pad);
+        const stripeMat=new THREE.MeshBasicMaterial({color:0xc8d8dc,transparent:true,opacity:.7});
+        const stripe=new THREE.Mesh(new THREE.PlaneGeometry(lm.w*.82,.45),stripeMat);
+        stripe.rotation.x=-Math.PI/2; stripe.position.set(x,.31,z); scene.add(stripe);
+        addMapLabel(lm.name,'landmark',new THREE.Vector3(x,5.2,z-lm.d*.8),0,30);
     }
 
     /* Lane markings (dashed center line) */
@@ -1668,6 +1847,7 @@ function generateCity() {
         if(Math.random()>.06) continue;
         const px=(i-half)*C.blockSize, pz=(j-half)*C.blockSize;
         if(Math.abs(px)<40&&Math.abs(pz)<40) continue;
+        if(cityWaterAt(px,pz,10)) continue;
         const parkSize=12+Math.random()*10;
         /* Grass patch */
         const grass=new THREE.Mesh(new THREE.PlaneGeometry(parkSize,parkSize),
@@ -1825,6 +2005,7 @@ function generateCity() {
         const x=(gx-half)*C.blockSize;
         const z=(gz-half)*C.blockSize;
         if(Math.abs(x)<35&&Math.abs(z)<35) continue;
+        if(cityWaterAt(x,z,14)) continue;
 
         const maxBldg=C.blockSize-10;
         const w=8+Math.random()*Math.min(18,maxBldg-8), d=8+Math.random()*Math.min(18,maxBldg-8);
@@ -3068,11 +3249,17 @@ function gameOver(){
         document.getElementById('fuel-countdown').classList.remove('show');
         document.getElementById('fuel-warn-text').classList.remove('show');
     }catch(_){}
-    dbAddRun({
+    const runRecord = {
         score:S.score, dist:S.dist, kills:S.kills, rings:S.rings,
         ts:Date.now(), version:GAME_META.version, profileId: activeProfileId,
         gameMode:S.gameMode, persona:selectedPersona
-    }).then(async ()=>{await applyRunToProfile(); await refreshProfilesUI(); await refreshRunStats();}).catch(()=>{});
+    };
+    dbAddRun(runRecord).then(async ()=>{
+        await applyRunToProfile();
+        await refreshProfilesUI();
+        await syncBattleProfileToCloud(activeProfile, runRecord);
+        await refreshRunStats();
+    }).catch(()=>{});
 }
 
 /* ===== UI ===== */
@@ -3096,6 +3283,7 @@ let _fpsFrames=0,_fpsTime=0,_fpsVal=60;
 const $mpDebug=document.createElement('div');
 $mpDebug.id='mp-debug';
 $mpDebug.style.display='none';
+$mpDebug.innerHTML='<b>Battle Link</b><span>Initializing room...</span>';
 document.body.appendChild($mpDebug);
 
 function drawHeadingTape(hdg){
@@ -3201,7 +3389,7 @@ function drawADI(pitch,roll){
     c.fillStyle='#60a8d8';c.beginPath();c.arc(cx,cy,1.5,0,Math.PI*2);c.fill();
 }
 const $dbStats=document.getElementById('db-stats');
-const $profileMenu=document.getElementById('profile-menu'),$profileName=document.getElementById('profile-name'),$profileStats=document.getElementById('profile-stats');
+const $profileMenu=document.getElementById('profile-menu'),$profileName=document.getElementById('profile-name'),$profileStats=document.getElementById('profile-stats'),$battleInsight=document.getElementById('battle-insight');
 const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$modeBrief=document.getElementById('mode-brief'),$onlineSetup=document.getElementById('online-setup');
 const $modeCards=[...document.querySelectorAll('[data-mode]')];
 
@@ -3334,14 +3522,30 @@ async function loadControlSettings(){
 }
 async function refreshRunStats(){
     const topProfile = await dbTopRuns(3, activeProfileId);
-    const topGlobal = await dbTopRuns(3);
-    if(!topGlobal.length){$dbStats.textContent='No missions logged yet. Launch your first sortie.'; return;}
+    const recentProfile = await dbRecentRuns(4, activeProfileId);
+    const topGlobal = await dbTopRuns(4);
+    if(!topGlobal.length){
+        $dbStats.innerHTML='<b>Battle Database</b><br>No missions logged yet. Launch your first sortie to create a previous record.';
+        if($battleInsight) $battleInsight.textContent='No sorties yet. First launch will create battle insight for this callsign.';
+        return;
+    }
     const pTitle = activeProfile?.name || 'Operator';
+    const latest = recentProfile[0];
+    const avgScore = recentProfile.length ? Math.round(recentProfile.reduce((n,r)=>n+(r.score||0),0)/recentProfile.length) : 0;
     $dbStats.innerHTML=
-        `<b>${pTitle} Mission Log</b><br>` +
-        (topProfile.length ? topProfile.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts | ${Math.round(r.dist)}m | ${(r.gameMode||'single').toUpperCase()}`).join('<br>') : 'No sorties logged') +
-        `<br><b style="display:block;margin-top:6px">All Operators</b>` +
+        `<div class="record-grid">` +
+        `<div><b>${pTitle} Battle Profile</b><span>Best ${Math.round(activeProfile?.bestScore||0)} pts</span><span>Sorties ${activeProfile?.totalFlights||0}</span></div>` +
+        `<div><b>Recent Insight</b><span>Avg ${avgScore} pts</span><span>${latest ? `${Math.round(latest.dist||0)}m last range` : 'No recent sortie'}</span></div>` +
+        `</div>` +
+        `<b class="record-heading">Previous Records</b>` +
+        (recentProfile.length ? recentProfile.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts | ${Math.round(r.dist)}m | ${(r.gameMode||'single').toUpperCase()} | ${new Date(r.ts||Date.now()).toLocaleDateString()}`).join('<br>') : 'No sorties logged') +
+        `<b class="record-heading">Top Operators</b>` +
         topGlobal.map((r,i)=>`${i+1}. ${Math.round(r.score)} pts | ${Math.round(r.dist)}m | ${(r.gameMode||'single').toUpperCase()}`).join('<br>');
+    if($battleInsight){
+        const kd = activeProfile?.totalFlights ? (activeProfile.totalKills/activeProfile.totalFlights).toFixed(1) : '0.0';
+        const cloud = cloudSyncState.ok ? `Cloud: ${cloudSyncState.last}` : `Cloud: ${cloudSyncState.last}`;
+        $battleInsight.innerHTML = `<b>Battle Insight</b><br>Callsign: ${pTitle} | Mode: ${(activeProfile?.preferredMode||S.gameMode).toUpperCase()} | Kills/sortie: ${kd}<br>Previous record: ${latest ? `${Math.round(latest.score||0)} pts, ${Math.round(latest.dist||0)}m, ${(latest.gameMode||'single').toUpperCase()}` : 'none yet'}<br>${cloud}`;
+    }
 }
 function fmtSec(sec){
     const s=Math.max(0,Math.floor(sec));
@@ -3369,10 +3573,12 @@ async function refreshProfilesUI(){
     }
     const persona = getPersonaCfg();
     const mode = getModeCfg();
-    $profileStats.innerHTML = `<b>${activeProfile.name}</b> | ${persona.rank} ${persona.badge}<br>Mode: ${mode.label} | Online: ${getOnlineStateLabel()}<br>Sorties: ${activeProfile.totalFlights||0} | Best: ${Math.round(activeProfile.bestScore||0)} pts<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m | Time: ${fmtSec(activeProfile.totalTime||0)}`;
+    $profileStats.innerHTML = `<b>${activeProfile.name}</b> | ${persona.rank} ${persona.badge}<br>Mode: ${mode.label} | Online: ${getOnlineStateLabel()}<br>Sorties: ${activeProfile.totalFlights||0} | Best: ${Math.round(activeProfile.bestScore||0)} pts | Kills: ${activeProfile.totalKills||0}<br>Total Range: ${Math.round(activeProfile.totalDistance||0)}m | Time: ${fmtSec(activeProfile.totalTime||0)}`;
+    if($battleInsight && !$battleInsight.innerHTML.includes('Battle Insight')) $battleInsight.textContent = `Battle profile ready for ${activeProfile.name}. Launch a sortie to create insight and previous records.`;
+    syncBattleProfileToCloud(activeProfile).then(()=>refreshRunStats()).catch(()=>{});
 }
 async function createProfileFromInput(){
-    const name = ($profileName.value||'').trim();
+    const name = ($profileName.value||'').trim().toUpperCase().replace(/[^A-Z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24);
     if(!name){ notify('ENTER CALLSIGN','kill-note'); return; }
     const id = `pilot_${Date.now().toString(36)}`;
     await dbSaveProfile({
@@ -3385,6 +3591,7 @@ async function createProfileFromInput(){
     $profileName.value='';
     await refreshProfilesUI();
     await refreshRunStats();
+    await syncBattleProfileToCloud(activeProfile);
     notify('OPERATOR REGISTERED','ring-note');
 }
 async function switchActiveProfile(id){
@@ -3609,7 +3816,10 @@ function updHUD(spd,dt=1/60){
         if(active){
             const age = onlineStats.lastReceiveAt ? `${Math.round((performance.now()-onlineStats.lastReceiveAt)/1000)}s` : 'never';
             const transport = onlineConnected ? 'SUPABASE' : (localRoomConnected ? 'LOCAL' : 'OFFLINE');
-            $mpDebug.textContent = `MP ${transport} | ROOM ${onlineConfig.room||'--'} | SENT ${onlineStats.sent} | RX ${onlineStats.received} | CONTACTS ${remotePilots.size} | PRES ${onlinePresenceCount||0} | LAST ${age} | ${onlineStats.lastStatus}`;
+            const stateClass = onlineConnected ? 'good' : (localRoomConnected ? 'warn' : 'bad');
+            const statusText = remotePilots.size ? `${remotePilots.size} enemy contact active` : onlineStats.lastStatus;
+            $mpDebug.className = `battle-status ${stateClass}`;
+            $mpDebug.innerHTML = `<b>Battle Link</b><span>${transport} room ${onlineConfig.room||'--'} | sent ${onlineStats.sent} | rx ${onlineStats.received} | last ${age}</span><em>${statusText}</em>`;
         }
     }
     if($flightWarn){

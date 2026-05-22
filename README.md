@@ -15,13 +15,14 @@ This project is playable today, but it is still a simulator-game prototype. The 
 ## Current Features
 
 - Playable directly from GitHub Pages with a dedicated terminal-themed landing page and gameplay page.
-- Three.js city environment with buildings, roads, water, traffic, smoke, particles, and weather effects.
+- Three.js city environment with buildings, roads, Kortoa River, 4th China Friendship Bridge, named districts, traffic, smoke, particles, and weather effects.
 - Drone and helicopter vehicle modes.
 - Game modes: Single, Training, Mission, Free Flight, and Online Battle.
-- Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time.
+- Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time, with optional Supabase cloud-sync tables documented.
 - Profile personas: Recon Specialist, Combat Pilot, Test Pilot, and Instructor.
 - Assisted flight systems with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, GPS status, and warning messages.
 - Combat loop with hostile drones, lock/follow assist, projectiles, explosions, health, score, waypoints, orbs, and power-ups.
+- Battle profile insight panel with previous records, recent performance, cloud-sync status, and profile stats.
 - HUD instruments for heading, speed, altitude, attitude, hull, boost, fuel, battery, signal, GPS, air density, threats, mode, and mission warnings.
 - Help screen with controls, mode explanations, profile notes, and simulator limitations.
 - Keyboard, mouse, and gamepad support.
@@ -31,6 +32,8 @@ This project is playable today, but it is still a simulator-game prototype. The 
 GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime**: Broadcast carries fast drone state and hit events, while Presence tracks who is in the room.
 
 The app is already configured with the project's public Supabase key.
+
+Battle room networking uses Supabase Realtime. Battle profile cloud sync is optional and needs the SQL tables in `docs/SUPABASE_BATTLE_PROFILE_SETUP.md`; without those tables, records stay local and the UI reports cloud sync as pending.
 
 1. Open the simulator and choose **Online Battle**.
 2. Click **Create Battle** to generate a code such as `DRN-482K`.
@@ -98,6 +101,7 @@ npm run preview
 - `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
 - `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
 - `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Battle rooms.
+- `docs/SUPABASE_BATTLE_PROFILE_SETUP.md`: optional Supabase SQL for battle profiles, runs, public leaderboards, and author/player pages.
 - `check-module.mjs`: syntax check for the simulator module.
 - `ROADMAP.md`: phased project direction.
 - `ATTRIBUTIONS.md`: open-resource credits.
