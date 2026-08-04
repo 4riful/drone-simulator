@@ -142,6 +142,7 @@
 
     <div class="m-btns">
         <a class="btn" href="./index.html">Home</a>
+        <button class="btn btn-primary" id="btn-campaign">Story Campaign</button>
         <button class="btn" id="btn-settings">Settings</button>
         <button class="btn" id="btn-help">Help</button>
         <button class="btn btn-danger" id="btn-exit-app">Exit</button>
@@ -234,6 +235,60 @@
             <button class="btn" id="btn-pause-settings">Mission Config</button>
             <button class="btn btn-danger" id="btn-restart-p">Abort &amp; Redeploy</button>
             <button class="btn btn-danger" id="btn-exit-menu">Return to Base</button>
+        </div>
+    </div>
+</div>
+<div id="campaign-screen" class="screen hidden">
+    <div class="cmp-wrap">
+        <div class="cmp-head">
+            <span class="cmp-tag">CLASSIFIED // TASK FORCE TALON</span>
+            <h1>Operation Andromeda</h1>
+            <p class="cmp-sub">Andromeda Harbor went dark at 04:12. Seven sorties. One pilot.</p>
+        </div>
+        <div class="cmp-body">
+            <div class="cmp-list" id="cmp-list"></div>
+            <div class="cmp-detail">
+                <div class="cmp-handler">
+                    <div class="cmp-portrait" id="cmp-portrait">EV</div>
+                    <div class="cmp-handler-txt">
+                        <div class="cmp-handler-name" id="cmp-handler-name">Maj. Elena Voss</div>
+                        <div class="cmp-handler-role" id="cmp-handler-role">Mission Handler — FOB ANVIL</div>
+                        <div class="cmp-handler-bio" id="cmp-handler-bio"></div>
+                    </div>
+                </div>
+                <div class="cmp-brief" id="cmp-brief"></div>
+                <div class="cmp-objectives" id="cmp-objectives"></div>
+                <div class="cmp-actions">
+                    <button class="btn btn-primary" id="btn-cmp-launch">Launch Sortie</button>
+                    <button class="btn" id="btn-cmp-back">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="debrief-screen" class="screen hidden">
+    <div class="cmp-wrap">
+        <div class="cmp-head">
+            <span class="cmp-tag" id="dbf-tag">SORTIE COMPLETE</span>
+            <h1 id="dbf-title">Mission Complete</h1>
+        </div>
+        <div class="cmp-body cmp-body-single">
+            <div class="cmp-detail">
+                <div class="cmp-handler">
+                    <div class="cmp-portrait" id="dbf-portrait">EV</div>
+                    <div class="cmp-handler-txt">
+                        <div class="cmp-handler-name" id="dbf-handler-name">Maj. Elena Voss</div>
+                        <div class="cmp-handler-role" id="dbf-handler-role">Mission Handler — FOB ANVIL</div>
+                    </div>
+                </div>
+                <div class="cmp-brief" id="dbf-text"></div>
+                <div class="cmp-objectives" id="dbf-stats"></div>
+                <div class="cmp-actions">
+                    <button class="btn btn-primary" id="btn-dbf-next">Next Sortie</button>
+                    <button class="btn" id="btn-dbf-retry">Fly Again</button>
+                    <button class="btn" id="btn-dbf-menu">Return to Base</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

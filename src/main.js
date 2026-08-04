@@ -1,10 +1,19 @@
 
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import * as THREE from 'three';
+import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js';
+import { createPostFX } from './render/postfx.js';
+import {
+    CAMPAIGN, CHARACTERS, handlerFor, missionById, MissionDirector,
+    STORY_LOCATIONS, normalizeProgress, isUnlocked, markComplete, defaultProgress,
+} from './story/campaign.js';
 
 const SUPABASE_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 const C = {
-    citySize: 500, blockSize: 44, buildChance: 0.48,
+    /* Larger blocks => far fewer streets. The old 44m grid produced a 12x12
+     * lattice of identical roads that read as graph paper from the air; real
+     * cities have a few arterials and big built-up blocks between them. */
+    citySize: 500, blockSize: 84, buildChance: 0.92,
     enemyCount: 7, ringCount: 22, orbCount: 18,
     /* Physics (racing quadcopter — thrust/weight ~4:1) */
     gravity: -9.81,
@@ -670,23 +679,83 @@ function shake(i,d){shakeI=i;shakeD=d;}
 
 /* ===== SCENE ===== */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1e2530);
-scene.fog = new THREE.FogExp2(0x1e2530, 0.0016);
+/* Background, fog and all lighting are owned by the atmosphere rig below. */
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 2000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+/* far must clear the star shell and cloud sheets; near is raised off 0.1 to buy
+ * back depth precision now that decals sit coplanar with the roads. */
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.5, 5000);
+const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();console.warn('WebGL context lost');});
 renderer.domElement.addEventListener('webglcontextrestored',()=>{console.log('WebGL context restored');});
 
-scene.add(new THREE.HemisphereLight(0x8899bb, 0x443828, 0.9));
-scene.add(new THREE.AmbientLight(0x505050, 0.7));
-const sun = new THREE.DirectionalLight(0xccbbaa, 1.0);
-sun.position.set(200, 400, 100); scene.add(sun);
+const isMobileGPU = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const atmo = createAtmosphere(scene, renderer, {
+    shadowRadius: 170,
+    shadowMapSize: isMobileGPU ? 1024 : 2048,
+    cloudAltitude: 320,
+});
+const postfx = createPostFX(renderer, scene, camera, { quality: isMobileGPU ? 'low' : 'high' });
+
+/** Cast/receive flags, set explicitly per site — never via scene.traverse. */
+function tagShadows(obj, cast, receive){
+    obj.castShadow = !!cast;
+    obj.receiveShadow = !!receive;
+    return obj;
+}
+
+/* Render diagnostics. `window.__perf` is read by the screenshot harness; F3
+ * toggles the on-screen overlay. */
+const __perf = window.__perf = { calls:0, tris:0, textures:0, geometries:0, fps:0, shadowMeshes:0, tod:'dusk' };
+let __perfEl = null, __perfShown = false, __frameAccum = 0, __frameCount = 0;
+/* The composer resets renderer.info on every pass, so totals have to be
+ * accumulated manually across the shadow pass, scene pass and post chain. */
+renderer.info.autoReset = false;
+function updatePerf(dt){
+    const info = renderer.info;
+    __perf.calls = info.render.calls;
+    __perf.tris = info.render.triangles;
+    __perf.textures = info.memory.textures;
+    __perf.geometries = info.memory.geometries;
+    __frameAccum += dt; __frameCount++;
+    if(__frameAccum >= 0.5){ __perf.fps = Math.round(__frameCount/__frameAccum); __frameAccum = 0; __frameCount = 0; }
+    if(__perfShown && __perfEl){
+        __perfEl.textContent = `calls ${__perf.calls} | tris ${(__perf.tris/1000).toFixed(0)}k | tex ${__perf.textures} | geo ${__perf.geometries} | ${__perf.fps}fps | ${__perf.tod}`;
+    }
+}
+window.addEventListener('keydown',e=>{
+    if(e.code!=='F3') return;
+    __perfShown = !__perfShown;
+    if(!__perfEl){
+        __perfEl = document.createElement('div');
+        __perfEl.style.cssText='position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:9999;font:11px monospace;color:#9fe8b0;background:rgba(0,0,0,.7);padding:3px 8px;pointer-events:none';
+        document.body.appendChild(__perfEl);
+    }
+    __perfEl.style.display = __perfShown ? 'block' : 'none';
+});
+
+/** Time of day drives sky, lighting, grade, and artificial-light intensity. */
+const facadeMaterials = [];
+const lampMaterials = [];
+function applyTimeOfDay(key){
+    atmo.setTimeOfDay(key);
+    postfx.applyPreset(key);
+    for(const m of facadeMaterials){
+        if(m.userData.baseEmissive === undefined) m.userData.baseEmissive = m.emissiveIntensity;
+        m.emissiveIntensity = m.userData.baseEmissive * atmo.windowLights;
+    }
+    for(const m of lampMaterials){
+        if(m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.opacity ?? 1;
+        m.opacity = m.userData.baseOpacity * Math.max(0.15, atmo.streetLights);
+    }
+    __perf.tod = key;
+}
+window.__setTOD = applyTimeOfDay;
+window.__atmo = atmo;
+window.__renderer = renderer;
+window.__scene = scene;
 
 /* ===== DAMAGE / BOOST OVERLAYS ===== */
 const dmgFlash = document.getElementById('dmg-flash');
@@ -1177,83 +1246,94 @@ async function trackOnlineState(force=false){
     }
 }
 
-/* Sky dome with gradient */
-const skyC = document.createElement('canvas'); skyC.width=2; skyC.height=512;
-const skyX = skyC.getContext('2d');
-const skyG = skyX.createLinearGradient(0,0,0,512);
-skyG.addColorStop(0,'#020408'); skyG.addColorStop(0.15,'#060a14');
-skyG.addColorStop(0.35,'#0c1420'); skyG.addColorStop(0.55,'#121c2a');
-skyG.addColorStop(0.75,'#182838'); skyG.addColorStop(1,'#1a2030');
-skyX.fillStyle=skyG; skyX.fillRect(0,0,2,512);
-const skyTex = new THREE.CanvasTexture(skyC);
-const skyDome = new THREE.Mesh(
-    new THREE.SphereGeometry(900,32,20),
-    new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })
-);
-scene.add(skyDome);
-
-/* Stars */
-const starVs=[];
-for(let i=0;i<800;i++){const r=400+Math.random()*480,t=Math.random()*Math.PI*2,p=Math.acos(Math.random()*2-1);starVs.push(r*Math.sin(p)*Math.cos(t),Math.abs(r*Math.cos(p))+80,r*Math.sin(p)*Math.sin(t));}
-const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starVs,3));
-const stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xc0d0e8,size:0.9,transparent:true,opacity:.6}));
-scene.add(stars);
+/* Sky, stars and clouds come from the atmosphere rig (src/render/atmosphere.js). */
 
 /* Ground */
-const gnd=new THREE.Mesh(new THREE.PlaneGeometry(1400,1400),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
-gnd.rotation.x=-Math.PI/2; gnd.position.y=-0.1; scene.add(gnd);
-const grid=new THREE.GridHelper(1400,70,0x4a4840,0x383830); grid.material.opacity=0.08; grid.material.transparent=true; scene.add(grid);
+const gnd=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
+gnd.rotation.x=-Math.PI/2; gnd.position.y=-0.1; tagShadows(gnd,false,true); scene.add(gnd);
 
 /* ===== WINDOW TEXTURE GENERATOR (HD) ===== */
 const winTextures = [];
 function initWinTex(count) {
-    const warmPal=['#887860','#9a8a70','#786848','#a09070','#685838'];
-    const coolPal=['#607080','#506878','#687888','#586878','#485868'];
-    const neonPal=['#ccaa66','#ddbb77','#eebb55','#ddcc88','#ccbb88','#bbaa66'];
+    const warmPal=['#c8a878','#d8bc90','#b09058','#c8b088','#a08850'];
+    const coolPal=['#8fa8c0','#7c98b4','#98b0c4','#88a0b8','#7088a0'];
+    const neonPal=['#ffdd99','#ffe4aa','#ffd980','#ffe8bb','#ffe0aa','#f0cc88'];
     for(let n=0;n<count;n++){
-        const cv=document.createElement('canvas'); cv.width=128; cv.height=256;
+        /* Two canvases per family: albedo (what the surface looks like unlit)
+         * and emissive (ONLY the lit window panes — the old code reused the
+         * albedo as its own emissiveMap, which made the concrete glow). */
+        const cv=document.createElement('canvas'); cv.width=256; cv.height=512;
         const cx=cv.getContext('2d');
-        const bs=30+Math.floor(Math.random()*15);
-        cx.fillStyle=`rgb(${bs+8},${bs+6},${bs+4})`; cx.fillRect(0,0,128,256);
+        const ev=document.createElement('canvas'); ev.width=256; ev.height=512;
+        const ex=ev.getContext('2d');
+        ex.fillStyle='#000'; ex.fillRect(0,0,256,512);
+
+        const bs=88+Math.floor(Math.random()*38);
+        cx.fillStyle=`rgb(${bs+8},${bs+5},${bs-2})`; cx.fillRect(0,0,256,512);
+        /* Concrete mottling so the facade isn't a flat colour between windows. */
+        for(let i=0;i<1400;i++){
+            const v=bs+10+Math.floor(Math.random()*40);
+            cx.fillStyle=`rgba(${v},${v-2},${v-6},${.05+Math.random()*.12})`;
+            cx.fillRect(Math.random()*256,Math.random()*512,1+Math.random()*5,1+Math.random()*3);
+        }
         const cols=4+Math.floor(Math.random()*4), rows=8+Math.floor(Math.random()*8);
-        const ww=Math.floor(100/cols), wh=Math.floor(220/rows);
-        const gx=Math.floor((128-cols*ww)/(cols+1)), gy=Math.floor((256-rows*wh)/(rows+1));
+        const ww=Math.floor(200/cols), wh=Math.floor(440/rows);
+        const gx=Math.floor((256-cols*ww)/(cols+1)), gy=Math.floor((512-rows*wh)/(rows+1));
         const pal=Math.random()<.5?warmPal:coolPal;
         for(let r=0;r<rows;r++){for(let c=0;c<cols;c++){
             if(Math.random()<.18) continue;
             const wx=gx+c*(ww+gx), wy=gy+r*(wh+gy);
-            /* Window frame */
-            cx.fillStyle='#0a0a14'; cx.fillRect(wx-1,wy-1,ww+2,wh+2);
-            /* Glass */
+            /* Recessed mullion frame */
+            cx.fillStyle='#2a2a30'; cx.fillRect(wx-2,wy-2,ww+4,wh+4);
+            /* Most panes are unlit glass with only slight variation — a facade
+             * where every window is a different bright colour reads as a
+             * checkerboard, not a building. Lit windows stay the minority. */
             const bright=Math.random();
-            if(bright>.92){
-                cx.fillStyle=neonPal[Math.floor(Math.random()*neonPal.length)];
-                cx.globalAlpha=.6+Math.random()*.4;
-            } else if(bright>.15){
-                cx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
-                cx.globalAlpha=.3+Math.random()*.55;
+            let lit=null;
+            if(bright>.94){
+                lit=neonPal[Math.floor(Math.random()*neonPal.length)];
+                cx.fillStyle=lit; cx.globalAlpha=.7;
+            } else if(bright>.78){
+                lit=pal[Math.floor(Math.random()*pal.length)];
+                cx.fillStyle=lit; cx.globalAlpha=.4+Math.random()*.25;
             } else {
-                cx.fillStyle='#050508'; cx.globalAlpha=.9;
+                /* Unlit glass: dark, reflective, no emission. Tight value range
+                 * so the wall reads as one continuous curtain of glazing. */
+                const g=36+Math.floor(Math.random()*14);
+                cx.fillStyle=`rgb(${g-6},${g},${g+8})`; cx.globalAlpha=.95;
             }
             cx.fillRect(wx,wy,ww,wh);
-            /* Curtain/blind (partial cover) */
-            if(Math.random()<.25 && bright>.15){
-                cx.fillStyle='#0a0a10'; cx.globalAlpha=.5+Math.random()*.3;
-                const bh=wh*(0.3+Math.random()*.5);
-                cx.fillRect(wx,wy,ww,bh);
-            }
             cx.globalAlpha=1;
+
+            if(lit){
+                ex.fillStyle=lit;
+                ex.globalAlpha=bright>.86?1:.55+Math.random()*.3;
+                ex.fillRect(wx,wy,ww,wh);
+                ex.globalAlpha=1;
+            }
+            /* Blinds cover part of the pane in both maps. */
+            if(Math.random()<.25 && lit){
+                const bh=wh*(0.3+Math.random()*.5);
+                cx.fillStyle='rgba(18,18,22,.55)'; cx.fillRect(wx,wy,ww,bh);
+                ex.fillStyle='#000'; ex.fillRect(wx,wy,ww,bh);
+            }
         }}
-        /* Horizontal floor bands */
-        cx.fillStyle='rgba(20,20,30,0.5)';
+        /* Horizontal floor-slab shadow bands */
+        cx.fillStyle='rgba(24,24,28,0.45)';
         for(let r=0;r<rows;r++){
             const by=gy+r*(wh+gy)+wh;
-            cx.fillRect(0,by,128,Math.max(1,gy-1));
+            cx.fillRect(0,by,256,Math.max(1,gy-1));
         }
+
         const tex=new THREE.CanvasTexture(cv);
         tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
         tex.minFilter=THREE.LinearMipmapLinearFilter;
-        winTextures.push(tex);
+        tex.colorSpace=THREE.SRGBColorSpace;   /* albedo is authored in sRGB */
+        const emi=new THREE.CanvasTexture(ev);
+        emi.wrapS=emi.wrapT=THREE.RepeatWrapping;
+        emi.minFilter=THREE.LinearMipmapLinearFilter;
+        emi.colorSpace=THREE.SRGBColorSpace;
+        winTextures.push({tex, emi});
     }
 }
 initWinTex(10);
@@ -1271,22 +1351,37 @@ const bldgEmissiveColors = [
     0x1a2028, 0x201818, 0x182020, 0x201c18, 0x181c28,
     0x201818, 0x1a2020, 0x1c1818, 0x182018, 0x201c18,
 ];
+/* Facade materials are keyed by (texture family, tiling) and cached, so dozens
+ * of buildings share a handful of materials instead of cloning a texture each.
+ * Tiling is quantised to keep the cache small. */
+const bldgMatCache = new Map();
 function mkBldgMat(w, h) {
-    const src = winTextures[Math.floor(Math.random()*winTextures.length)];
-    const tex = src.clone();
-    tex.repeat.set(Math.max(1,Math.round(w/10)), Math.max(1,Math.round(h/10)));
-    tex.needsUpdate = true;
+    const idx = Math.floor(Math.random()*winTextures.length);
+    const rx = Math.max(1, Math.round(w/10));
+    const ry = Math.max(1, Math.round(h/10));
+    const key = `${idx}:${rx}:${ry}`;
+    const hit = bldgMatCache.get(key);
+    if(hit) return hit;
+
+    const src = winTextures[idx];
+    /* Distinct Texture objects sharing one canvas image — cheap, and unlike
+     * clone() they don't re-upload the bitmap to the GPU. */
+    const tex = src.tex.clone(); tex.repeat.set(rx, ry); tex.needsUpdate = true;
+    const emi = src.emi.clone(); emi.repeat.set(rx, ry); emi.needsUpdate = true;
+
     const baseCol = bldgBaseColors[Math.floor(Math.random()*bldgBaseColors.length)];
-    const emCol = bldgEmissiveColors[Math.floor(Math.random()*bldgEmissiveColors.length)];
-    return new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
         color: baseCol,
         map: tex,
-        emissive: emCol,
-        emissiveMap: tex,
-        emissiveIntensity: 0.35,
-        roughness: .78+Math.random()*.12,
-        metalness: .1+Math.random()*.15,
+        emissive: 0xffffff,
+        emissiveMap: emi,      /* lit panes only — not the concrete between them */
+        emissiveIntensity: 0.9,
+        roughness: .72+Math.random()*.16,
+        metalness: .08+Math.random()*.12,
     });
+    facadeMaterials.push(mat);
+    bldgMatCache.set(key, mat);
+    return mat;
 }
 
 /* ===== CITY ===== */
@@ -1413,7 +1508,7 @@ function generateCity() {
     const groundMat = new THREE.MeshStandardMaterial({color:0x58554b, map:makeGroundTex(), roughness:.96, metalness:.03});
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI/2; ground.position.y = -0.05;
-    scene.add(ground);
+    tagShadows(ground,false,true); scene.add(ground);
     const concreteTex=makeConcreteTex();
     const concreteMat=new THREE.MeshStandardMaterial({color:0x6a6a62,map:concreteTex,roughness:.92,metalness:.04});
     const dirtMat=new THREE.MeshStandardMaterial({color:0x66523a,roughness:.96,metalness:.02});
@@ -1515,11 +1610,11 @@ function generateCity() {
         const rtH=rdTex.clone();rtH.repeat.set(Math.ceil((C.citySize+80)/10),1);rtH.needsUpdate=true;
         const rmH=new THREE.MeshStandardMaterial({color:0x505050,map:rtH,roughness:.8,metalness:.05});
         const rH=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+80,7),rmH);
-        rH.rotation.x=-Math.PI/2; rH.position.set(0,.01,pos); scene.add(rH);
+        rH.rotation.x=-Math.PI/2; rH.position.set(0,.01,pos); tagShadows(rH,false,true); scene.add(rH);
         const rtV=rdTex.clone();rtV.repeat.set(1,Math.ceil((C.citySize+80)/10));rtV.needsUpdate=true;
         const rmV=new THREE.MeshStandardMaterial({color:0x505050,map:rtV,roughness:.8,metalness:.05});
         const rV=new THREE.Mesh(new THREE.PlaneGeometry(7,C.citySize+80),rmV);
-        rV.rotation.x=-Math.PI/2; rV.position.set(pos,.01,0); scene.add(rV);
+        rV.rotation.x=-Math.PI/2; rV.position.set(pos,.01,0); tagShadows(rV,false,true); scene.add(rV);
     }
 
     /* Bridge decks where N/S roads cross the river */
@@ -1540,7 +1635,7 @@ function generateCity() {
         railR.position.set(x+3.75,0.9,riverZ); scene.add(railR);
     }
     if(namedBridge){
-        addMapLabel(bridgeCfg?.name||'Central River Bridge',riverCfg.name||'Main River',new THREE.Vector3(namedBridge.position.x,5.8,riverZ+riverW*.8),0,42);
+
     }
 
     /* Bridge decks where E/W roads cross the canal */
@@ -1562,7 +1657,7 @@ function generateCity() {
         const x=C.citySize*d.x, z=C.citySize*d.z;
         const ring=new THREE.Mesh(new THREE.RingGeometry(d.radius*.92,d.radius,48),districtRingMat.clone());
         ring.material.color.setHex(d.color||0x63ff9c); ring.rotation.x=-Math.PI/2; ring.position.set(x,.04,z); scene.add(ring);
-        addMapLabel(d.name,'district',new THREE.Vector3(x,6.8,z),0,30);
+
     }
     for(const lm of CITY_MAP.landmarks){
         const x=C.citySize*lm.x, z=C.citySize*lm.z;
@@ -1571,7 +1666,7 @@ function generateCity() {
         const stripeMat=new THREE.MeshBasicMaterial({color:0xc8d8dc,transparent:true,opacity:.7});
         const stripe=new THREE.Mesh(new THREE.PlaneGeometry(lm.w*.82,.45),stripeMat);
         stripe.rotation.x=-Math.PI/2; stripe.position.set(x,.31,z); scene.add(stripe);
-        addMapLabel(lm.name,'landmark',new THREE.Vector3(x,5.2,z-lm.d*.8),0,30);
+
     }
 
     /* Lane markings (dashed center line) */
@@ -2086,17 +2181,54 @@ function generateCity() {
         return tex;
     }
 
-    /* Buildings */
-    for(let gx=0;gx<blocks;gx++){for(let gz=0;gz<blocks;gz++){
-        if(Math.random()>C.buildChance) continue;
-        const x=(gx-half)*C.blockSize;
-        const z=(gz-half)*C.blockSize;
-        if(Math.abs(x)<35&&Math.abs(z)<35) continue;
-        if(cityWaterAt(x,z,14)) continue;
+    /* Buildings.
+     *
+     * Height is driven by a district density field rather than pure noise, so
+     * the city actually has a skyline: towers cluster downtown and fall away
+     * toward the riverfront and the industrial yard. */
+    const DISTRICT_WEIGHT = { 'downtown':1.0, 'riverfront':0.55, 'industrial':0.34, 'command-base':0.2 };
+    function densityAt(x,z){
+        let best=0;
+        for(const dist of CITY_MAP.districts){
+            const dx=x-dist.x*C.citySize, dz=z-dist.z*C.citySize;
+            const r=Math.hypot(dx,dz)/(dist.radius*2.6);
+            if(r>=1) continue;
+            /* smoothstep falloff from the district centre */
+            const f=1-(r*r*(3-2*r));
+            best=Math.max(best, f*(DISTRICT_WEIGHT[dist.id]??0.4));
+        }
+        /* Global radial falloff so the map edges stay low-rise. */
+        const edge=1-Math.min(1,Math.hypot(x,z)/(C.citySize*0.72));
+        return Math.max(0, best*(0.35+0.65*edge));
+    }
 
-        const maxBldg=C.blockSize-10;
-        const w=8+Math.random()*Math.min(18,maxBldg-8), d=8+Math.random()*Math.min(18,maxBldg-8);
-        const h=(Math.random()<.07?80:15)+Math.random()*65;
+    /* Each street block is filled with a cluster of lots rather than one lonely
+     * tower, so the city reads as continuous built-up fabric between arterials
+     * instead of isolated boxes on empty ground. */
+    const ROAD_HALF = 7;                       /* road width/2 plus verge */
+    const usable = C.blockSize - ROAD_HALF*2;  /* buildable span inside a block */
+    for(let gx=0;gx<blocks;gx++){for(let gz=0;gz<blocks;gz++){
+        const bx=(gx-half)*C.blockSize;
+        const bz=(gz-half)*C.blockSize;
+        const blockDens=densityAt(bx,bz);
+        /* Dense districts subdivide into more, smaller lots. */
+        const sub = blockDens>0.55 ? 3 : blockDens>0.28 ? 2 : 2;
+        const lot = usable/sub;
+
+    for(let sx=0;sx<sub;sx++){for(let sz=0;sz<sub;sz++){
+        if(Math.random()>C.buildChance) continue;
+        /* Lot centre inside the block, with a little jitter for irregularity. */
+        const x=bx + (sx-(sub-1)/2)*lot + (Math.random()-.5)*lot*0.12;
+        const z=bz + (sz-(sub-1)/2)*lot + (Math.random()-.5)*lot*0.12;
+        if(Math.abs(x)<38&&Math.abs(z)<38) continue;
+        if(cityWaterAt(x,z,16)) continue;
+
+        const dens=densityAt(x,z);
+        /* Footprints nearly fill their lot, leaving only a narrow light well. */
+        const fill=0.72+Math.random()*0.2;
+        const w=Math.max(7, lot*fill*(0.85+Math.random()*0.3));
+        const d=Math.max(7, lot*fill*(0.85+Math.random()*0.3));
+        const h=7+dens*dens*135*(0.5+Math.random()*0.8)+Math.random()*12;
         const geo=new THREE.BoxGeometry(w,h,d);
 
         const sideMat = mkBldgMat(w,h);
@@ -2104,14 +2236,27 @@ function generateCity() {
         const mats = [sideMat2, sideMat2, roofMat, roofMat, sideMat, sideMat];
         const mesh = new THREE.Mesh(geo, mats);
         mesh.position.set(x, h/2, z);
+        tagShadows(mesh,true,true);
         scene.add(mesh);
+
+        /* Floor-slab bands and a cornice cap: cheap proud rings that give the
+         * facade real self-shadowing under a low sun. */
+        const bandMat=new THREE.MeshStandardMaterial({color:0x6d6a63,roughness:.82,metalness:.06});
+        const floors=Math.max(1,Math.floor(h/18));
+        for(let fb=1;fb<=floors;fb++){
+            const by=(h/(floors+1))*fb;
+            const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.35,0.3,d+0.35),bandMat);
+            band.position.set(x,by,z); tagShadows(band,true,true); scene.add(band);
+        }
+        const cornice=new THREE.Mesh(new THREE.BoxGeometry(w+0.9,0.55,d+0.9),bandMat);
+        cornice.position.set(x,h-0.28,z); tagShadows(cornice,true,true); scene.add(cornice);
 
         /* Real buildings sit on plinths, plazas, loading bays, and visible foundations. */
         const plinthMat=new THREE.MeshStandardMaterial({color:0x595955,roughness:.86,metalness:.08});
         const plinth=new THREE.Mesh(new THREE.BoxGeometry(w+3.4,.45,d+3.4),plinthMat);
-        plinth.position.set(x,.22,z); scene.add(plinth);
+        plinth.position.set(x,.22,z); tagShadows(plinth,true,true); scene.add(plinth);
         const apron=new THREE.Mesh(new THREE.PlaneGeometry(w+8,d+8),concreteMat);
-        apron.rotation.x=-Math.PI/2; apron.position.set(x,.035,z); scene.add(apron);
+        apron.rotation.x=-Math.PI/2; apron.position.set(x,.035,z); tagShadows(apron,false,true); scene.add(apron);
         if(Math.random()<.55){
             const dockMat=new THREE.MeshStandardMaterial({color:0x4b4b48,roughness:.82,metalness:.18});
             const dock=new THREE.Mesh(new THREE.BoxGeometry(Math.min(w*.55,7),.8,1.2),dockMat);
@@ -2120,9 +2265,9 @@ function generateCity() {
             shutter.position.set(x,1.4,z-d/2-.06); scene.add(shutter);
         }
 
+        /* No neon wireframe outline — real buildings are read by their silhouette
+         * and cornice shadows, not by a glowing edge. */
         const nc=neonCols[Math.floor(Math.random()*neonCols.length)];
-        const edges=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:nc,transparent:true,opacity:.55}));
-        edges.position.copy(mesh.position); scene.add(edges);
 
         /* One neon signboard per building */
         {
@@ -2145,7 +2290,7 @@ function generateCity() {
             scene.add(ns);
         }
 
-        buildings.push({mesh, edges, bbox:new THREE.Box3().setFromObject(mesh)});
+        buildings.push({mesh, bbox:new THREE.Box3().setFromObject(mesh)});
 
         /* Storefront at ground level */
         if(Math.random()<.6){
@@ -2245,7 +2390,8 @@ function generateCity() {
             const hMark=new THREE.Mesh(new THREE.PlaneGeometry(.8,1.8),new THREE.MeshBasicMaterial({color:0xffff44,transparent:true,opacity:.35,side:THREE.DoubleSide}));
             hMark.rotation.x=-Math.PI/2; hMark.position.set(x,h+.06,z); scene.add(hMark);
         }
-    }}
+    }}   /* lots within a block */
+    }}   /* blocks */
 }
 function updateWater(dt){
     for(const w of waterAnims){
@@ -2775,6 +2921,17 @@ const heliNoseLight = new THREE.Mesh(new THREE.SphereGeometry(.07,6,6), heliAcce
 heliNoseLight.position.set(0,-.02,-1.85); heliVis.add(heliNoseLight);
 
 drone.position.copy(SPAWN); scene.add(drone);
+/* The aircraft is a small, bounded subtree, so a traverse here is cheap — unlike
+ * the city, where shadow flags are set explicitly per site. Skip the unlit
+ * helpers (rotor discs, muzzle flashes, light bulbs) so they don't punch
+ * silhouettes into the shadow map. */
+for(const vis of [droneVis, heliVis]){
+    vis.traverse(o=>{
+        if(!o.isMesh) return;
+        const basic = o.material && o.material.isMeshBasicMaterial;
+        tagShadows(o, !basic, !basic);
+    });
+}
 
 /* ===== ENEMIES (3 types: Scout, Standard, Heavy) ===== */
 const enemies=[];
@@ -2852,8 +3009,24 @@ function mkEnemy(typeIdx){
     vis.scale.setScalar(et.scale);
     g.userData={hp:et.hp,spd:et.spd+Math.random()*6,wps,wi:0,mat:m,rotors:eRotors,vis,trail,type:et};
     scene.add(g); enemies.push(g);
+    return g;
 }
-function spawnEnemies(){for(let i=0;i<C.enemyCount;i++)mkEnemy();}
+/* Seconds after launch during which hostiles will not engage. */
+let launchGrace = 0;
+const LAUNCH_GRACE_SEC = 12;
+
+function spawnEnemies(){
+    for(let i=0;i<C.enemyCount;i++){
+        const e=mkEnemy();
+        /* Push anything that spawned within knife-fighting range of the pad out
+         * to a standoff distance, so the pilot gets a clean departure. */
+        if(e && e.position.distanceTo(drone.position)<140){
+            const a=Math.random()*Math.PI*2;
+            const r=150+Math.random()*70;
+            e.position.set(drone.position.x+Math.cos(a)*r, 20+Math.random()*45, drone.position.z+Math.sin(a)*r);
+        }
+    }
+}
 function nearestEnemy(maxDist=220){
     let best=null, bestD=maxDist;
     for(const e of enemies){
@@ -2961,6 +3134,9 @@ function updEnemies(dt){
         const distToDrone=e.position.distanceTo(drone.position);
         if(!e.userData.fireCD) e.userData.fireCD=0;
         e.userData.fireCD-=dt;
+        /* Weapons-hold window after launch: hostiles hold fire while the pilot
+         * is still climbing out, so the sortie never opens with incoming rounds. */
+        if(launchGrace>0) continue;
         if(distToDrone<50 && e.userData.fireCD<=0){
             enemyFire(e); e.userData.fireCD=(e.userData.type?e.userData.type.fireCD:3)+Math.random()*3;
             /* Enemy turns to face player when attacking */
@@ -3431,7 +3607,14 @@ function takeDmg(n, sourceLabel=''){
 function gameOver(){
     if(S.mode==='gameover') return;
     disconnectOnlineRoom().catch(()=>{});
-    S.mode='gameover';boom(drone.position.clone());sndBoom(true);vib(500,1,1);showScreen('gameover');updateMobileMode();
+    boom(drone.position.clone());sndBoom(true);vib(500,1,1);
+    if(activeMission){
+        /* A campaign loss goes to the story debrief, not the generic fail card. */
+        debriefPending={ok:false, mission:activeMission, reason:'AIRFRAME LOST'};
+        openDebrief();
+        return;
+    }
+    S.mode='gameover';showScreen('gameover');updateMobileMode();
     try{
         document.getElementById('fuel-warn-overlay').classList.remove('active','critical');
         document.getElementById('fuel-countdown').classList.remove('show');
@@ -3626,8 +3809,13 @@ const $gpAxisFill=[0,1,2,3,4,5].map(i=>document.getElementById(`gp-ax-${i}`));
 const $gpAxisVal=[0,1,2,3,4,5].map(i=>document.getElementById(`gp-axv-${i}`));
 const $gpBtnChips=[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>document.getElementById(`gp-btn-${i}`));
 
+const $campaign=document.getElementById('campaign-screen');
+const $debrief=document.getElementById('debrief-screen');
 function showScreen(name){
     $menu.classList.add('hidden');$pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');$help.classList.add('hidden');
+    $campaign.classList.add('hidden');$debrief.classList.add('hidden');
+    if(name==='campaign'){$campaign.classList.remove('hidden'); startUiAmbience(); document.body.classList.add('is-landing','is-menu'); document.body.classList.remove('is-gameplay'); updateMobileMode(); return;}
+    if(name==='debrief'){$debrief.classList.remove('hidden'); startUiAmbience(); document.body.classList.add('is-landing','is-menu'); document.body.classList.remove('is-gameplay'); updateMobileMode(); return;}
     document.body.classList.toggle('is-gameplay', name==='playing' || name==='pause' || name==='gameover');
     document.body.classList.toggle('is-landing', name==='menu' || name==='settings' || name==='help');
     document.body.classList.toggle('is-menu', name==='menu' || name==='settings' || name==='help');
@@ -3804,6 +3992,178 @@ async function applyRunToProfile(){
     p.preferredMode = S.gameMode;
     await dbSaveProfile(p);
 }
+/* ===== STORY CAMPAIGN =====================================================
+ * Operation Andromeda. The campaign screen lets the pilot pick an unlocked
+ * sortie, read the handler's brief, and launch. In flight, a MissionDirector
+ * drives the objective chain and the handler's radio calls; on completion the
+ * debrief screen closes the story beat and unlocks the next sortie.
+ * ========================================================================= */
+let campaignProgress = defaultProgress();
+let selectedMissionId = CAMPAIGN[0].id;
+let activeMission = null;       /* set while a campaign sortie is in the air */
+let director = null;
+let debriefPending = null;
+
+const $cmpList=document.getElementById('cmp-list');
+const $cmpBrief=document.getElementById('cmp-brief');
+const $cmpObjectives=document.getElementById('cmp-objectives');
+const $cmpPortrait=document.getElementById('cmp-portrait');
+const $cmpHandlerName=document.getElementById('cmp-handler-name');
+const $cmpHandlerRole=document.getElementById('cmp-handler-role');
+const $cmpHandlerBio=document.getElementById('cmp-handler-bio');
+
+function paintHandler(h, portraitEl, nameEl, roleEl, bioEl){
+    portraitEl.textContent = h.initials;
+    portraitEl.style.background = `linear-gradient(150deg, ${h.tint}, ${h.tint}55)`;
+    nameEl.textContent = h.name;
+    roleEl.textContent = `${h.role}  ·  ${h.callsign}`;
+    if(bioEl) bioEl.textContent = h.bio;
+}
+
+function renderCampaignList(){
+    $cmpList.innerHTML='';
+    let lastAct=null;
+    for(const m of CAMPAIGN){
+        const unlocked=isUnlocked(campaignProgress,m.id);
+        const done=campaignProgress.completed.includes(m.id);
+        const el=document.createElement('button');
+        el.type='button';
+        el.className='cmp-item'+(m.id===selectedMissionId?' active':'')+(unlocked?'':' locked')+(done?' done':'');
+        const actLine = m.act!==lastAct ? `<div class="cmp-item-act">${m.act}</div>` : '';
+        lastAct=m.act;
+        const best=campaignProgress.bestScores[m.id];
+        el.innerHTML=`${actLine}
+            <div class="cmp-item-no">SORTIE ${String(m.no).padStart(2,'0')}${unlocked?'':' — LOCKED'}</div>
+            <div class="cmp-item-name">${m.name}</div>
+            <div class="cmp-item-syn">${unlocked?m.synopsis:'Complete the previous sortie to unlock.'}${best?`<br>Best score: ${best}`:''}</div>`;
+        if(unlocked) el.addEventListener('click',()=>{selectedMissionId=m.id;renderCampaign();sndUiClick();});
+        $cmpList.appendChild(el);
+    }
+}
+
+function renderMissionDetail(){
+    const m=missionById(selectedMissionId)||CAMPAIGN[0];
+    paintHandler(handlerFor(m), $cmpPortrait, $cmpHandlerName, $cmpHandlerRole, $cmpHandlerBio);
+    $cmpBrief.innerHTML=m.briefing.map(p=>`<p>${p}</p>`).join('');
+    $cmpObjectives.innerHTML=`<div class="cmp-obj-h">SORTIE OBJECTIVES</div>`+
+        m.objectives.map((o,i)=>`<div class="cmp-obj"><span class="cmp-obj-i">${i+1}.</span><span>${o.text}</span></div>`).join('')+
+        `<div class="cmp-obj" style="margin-top:8px"><span class="cmp-obj-i">◷</span><span>Conditions: ${(TIME_PRESETS[m.time]||{}).label||m.time} · ${m.enemies?`${m.enemies} hostile airframes expected`:'no hostiles expected'}</span></div>`;
+}
+
+function renderCampaign(){ renderCampaignList(); renderMissionDetail(); }
+
+async function saveCampaignProgress(){
+    try{ await dbSetSetting('campaignProgress', campaignProgress); }catch(_){}
+}
+async function loadCampaignProgress(){
+    try{ campaignProgress = normalizeProgress(await dbGetSetting('campaignProgress')); }
+    catch(_){ campaignProgress = defaultProgress(); }
+    selectedMissionId = campaignProgress.current || CAMPAIGN[0].id;
+}
+
+function openCampaign(){ renderCampaign(); showScreen('campaign'); }
+
+function launchCampaignMission(){
+    const m=missionById(selectedMissionId);
+    if(!m || !isUnlocked(campaignProgress,m.id)) return;
+    activeMission = m;
+    setGameMode('mission', false);
+    startGame();
+}
+
+/* Objective marker so "go to the Harbor Yard" is actually findable from the air.
+ * Kept as a faint boundary column plus a ground ring — a solid cylinder at any
+ * useful radius simply fills the screen. */
+const objMarker=new THREE.Group();
+const objWallMat=new THREE.MeshBasicMaterial({color:0x63ff9c,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:false});
+const objWall=new THREE.Mesh(new THREE.CylinderGeometry(1,1,150,32,1,true),objWallMat);
+objWall.position.y=75; objMarker.add(objWall);
+const objRingMat=new THREE.MeshBasicMaterial({color:0x63ff9c,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:false});
+const objRing=new THREE.Mesh(new THREE.RingGeometry(0.94,1,64),objRingMat);
+objRing.rotation.x=-Math.PI/2; objRing.position.y=0.3; objMarker.add(objRing);
+objMarker.visible=false; scene.add(objMarker);
+
+function setObjectiveMarker(loc,radius){
+    if(!loc){ objMarker.visible=false; return; }
+    const r=radius||70;
+    objMarker.position.set(loc.x,0,loc.z);
+    objMarker.scale.set(r,1,r);
+    objMarker.visible=true;
+}
+
+function beginMissionDirector(){
+    director=null; objMarker.visible=false;
+    if(!activeMission) return;
+    applyTimeOfDay(activeMission.time);
+    director=new MissionDirector(activeMission, C.citySize);
+    const h=handlerFor(activeMission);
+    showRadioMsg(`${h.callsign}: ${activeMission.name.toUpperCase()} — you are cleared for departure, ${activeCallsign()}.`, 6);
+}
+
+function missionCtx(){
+    return {
+        kills:S.kills, waypoints:S.rings, hp:S.hp, maxHp:C.maxHP,
+        fuel:WORLD.fuel, pos:drone.position,
+    };
+}
+
+function handleMissionEvents(events){
+    for(const ev of events){
+        if(ev.type==='objective-start'){
+            $objective.textContent=ev.objective.text;
+            $objective.classList.add('show');
+            setObjectiveMarker(ev.location, ev.objective.radius);
+            if(ev.objective.radio){
+                const h=handlerFor(activeMission);
+                showRadioMsg(`${h.callsign}: ${expandRadioLine(ev.objective.radio)}`, 6);
+            }
+        } else if(ev.type==='objective-progress'){
+            $objective.textContent=`${ev.objective.text}  [${ev.status}]`;
+        } else if(ev.type==='objective-complete'){
+            notify('OBJECTIVE COMPLETE','ring-note'); addScore(500);
+        } else if(ev.type==='mission-complete'){
+            campaignProgress=markComplete(campaignProgress, activeMission.id, S.score);
+            saveCampaignProgress();
+            debriefPending={ok:true, mission:activeMission, reason:''};
+            openDebrief();
+        } else if(ev.type==='mission-failed'){
+            debriefPending={ok:false, mission:activeMission, reason:ev.reason};
+            openDebrief();
+        }
+    }
+}
+
+function openDebrief(){
+    if(!debriefPending) return;
+    const {ok, mission, reason}=debriefPending;
+    S.mode='debrief'; objMarker.visible=false; director=null;
+    const h=handlerFor(mission);
+    paintHandler(h, document.getElementById('dbf-portrait'), document.getElementById('dbf-handler-name'), document.getElementById('dbf-handler-role'), null);
+    document.getElementById('dbf-tag').textContent = ok ? 'SORTIE COMPLETE' : 'SORTIE FAILED';
+    document.getElementById('dbf-title').textContent = ok ? mission.name : `${mission.name} — ${reason}`;
+    document.getElementById('dbf-text').innerHTML = ok
+        ? `<p>${mission.debrief}</p><p><b>${mission.unlockText}</b></p>`
+        : `<p>${reason}. ${h.name.split(' ').slice(-1)[0]} wants you back on the pad and airborne again.</p>`;
+    document.getElementById('dbf-stats').innerHTML=`<div class="cmp-obj-h">SORTIE RECORD</div>`+
+        [['Score',S.score],['Hostiles neutralised',S.kills],['Waypoints',S.rings],['Distance',`${Math.round(S.dist)} m`],['Hull',`${Math.max(0,Math.round(S.hp))}/${C.maxHP}`],['Fuel remaining',`${Math.round(WORLD.fuel)}%`]]
+            .map(([k,v])=>`<div class="cmp-obj"><span class="cmp-obj-i">›</span><span>${k}: ${v}</span></div>`).join('');
+    const next=CAMPAIGN.find(x=>!campaignProgress.completed.includes(x.id));
+    const $next=document.getElementById('btn-dbf-next');
+    $next.style.display = (ok && next) ? '' : 'none';
+    if(next) $next.textContent = `Next Sortie — ${next.name}`;
+    applyRunToProfile().catch(()=>{});
+    showScreen('debrief');
+}
+
+document.getElementById('btn-cmp-launch').addEventListener('click',launchCampaignMission);
+document.getElementById('btn-cmp-back').addEventListener('click',()=>showScreen('menu'));
+document.getElementById('btn-dbf-retry').addEventListener('click',()=>{ if(activeMission){ selectedMissionId=activeMission.id; launchCampaignMission(); } });
+document.getElementById('btn-dbf-menu').addEventListener('click',()=>{ activeMission=null; openCampaign(); });
+document.getElementById('btn-dbf-next').addEventListener('click',()=>{
+    const next=CAMPAIGN.find(x=>!campaignProgress.completed.includes(x.id));
+    if(next){ selectedMissionId=next.id; renderCampaign(); launchCampaignMission(); }
+});
+
 function startGame(){
     document.body.classList.remove('direct-launch');
     updateMobileMode();
@@ -3825,7 +4185,13 @@ function startGame(){
     WORLD.fuel = getModeCfg().fuelStart;
     applyVehicleMode();
     lockTarget=null; lockFollow=false;
-    enemies.forEach(e=>scene.remove(e));enemies.length=0;if(getModeCfg().enemies)spawnEnemies();
+    /* A campaign sortie overrides the generic mode: its own hostile count,
+     * time of day and objective chain take over. */
+    const missionEnemies = activeMission ? activeMission.enemies : C.enemyCount;
+    launchGrace = missionEnemies>0 ? LAUNCH_GRACE_SEC : 0;
+    enemies.forEach(e=>scene.remove(e));enemies.length=0;
+    if(activeMission){ for(let i=0;i<missionEnemies;i++){ const e=mkEnemy(); if(e && e.position.distanceTo(drone.position)<140){ const a=Math.random()*Math.PI*2, r=150+Math.random()*70; e.position.set(drone.position.x+Math.cos(a)*r,20+Math.random()*45,drone.position.z+Math.sin(a)*r);} } }
+    else if(getModeCfg().enemies) spawnEnemies();
     rings.forEach(r=>{r.userData.got=false;r.visible=true;});
     orbs.forEach(o=>{o.userData.got=false;o.visible=true;});
     for(const b of bulletPool){b.userData.active=false;b.visible=false;b.position.set(0,-999,0);}bulletActive=0;
@@ -3838,7 +4204,8 @@ function startGame(){
     S.mode='playing';showScreen('playing');updateMobileMode();requestMobileImmersive();clock.getDelta();
     document.getElementById('game-meta').style.display='none';
     periodicTimer=20+Math.random()*15;
-    setTimeout(()=>radioSpeak('startup'),1500);
+    beginMissionDirector();
+    if(!activeMission) setTimeout(()=>radioSpeak('startup'),1500);
     notify(`${getModeCfg().label.toUpperCase()} MODE | ${getPersonaCfg().label.toUpperCase()}`,'ring-note');
     if(S.gameMode==='multiplayer') connectOnlineRoom();
 }
@@ -3887,7 +4254,13 @@ document.getElementById('btn-room-join').addEventListener('click',()=>{joinOnlin
 document.getElementById('btn-room-copy').addEventListener('click',()=>{copyOnlineInvite().catch(()=>setOnlineStatus('Could not copy invite.', 'bad'));});
 document.getElementById('btn-save-settings').addEventListener('click', async ()=>{pullSettingsFromUI();await saveControlSettings();notify('SETTINGS SAVED','ring-note');});
 [$setDeadzone,$setExpo,$setPitchS,$setRollS,$setYawS,$setThrS,$invLX,$invLY,$invRX,$invRY].forEach(el=>el.addEventListener('input',pullSettingsFromUI));
-document.getElementById('btn-start').addEventListener('click',startGame);
+document.getElementById('btn-campaign').addEventListener('click',openCampaign);
+document.getElementById('btn-start').addEventListener('click',()=>{
+    /* "Mission" is the story campaign; every other mode is a free sortie. */
+    if(S.gameMode==='mission'){ openCampaign(); return; }
+    activeMission=null;
+    startGame();
+});
 document.getElementById('btn-resume').addEventListener('click',togglePause);
 document.getElementById('btn-restart-p').addEventListener('click',startGame);
 document.getElementById('btn-restart-go').addEventListener('click',startGame);
@@ -3917,6 +4290,8 @@ setupMobileControls();
     await loadOnlineConfig();
     await refreshProfilesUI();
     await refreshRunStats();
+    await loadCampaignProgress();
+    renderCampaign();
     const boot = getBootParams();
     if(boot.mode && GAME_MODES[boot.mode]) setGameMode(boot.mode);
     if(boot.aircraft) {
@@ -4088,7 +4463,14 @@ function updHUD(spd,dt=1/60){
         }
     }
     /* Objectives */
-    checkObjective(dt);
+    /* Campaign sorties run the story objective chain; everything else falls
+     * back to the generic objective ladder. */
+    if(director){
+        handleMissionEvents(director.update(dt, missionCtx()));
+        if(objMarker.visible) objMarker.rotation.y += dt*0.25;
+    } else {
+        checkObjective(dt);
+    }
 }
 
 /* ===== MINIMAP ===== */
@@ -4150,7 +4532,20 @@ function updSmoke(dt){
 /* ===== INIT ===== */
 try{
     const bootRoomSeed = normalizeRoomId(new URLSearchParams(location.search).get('room'));
-    const initWorld = () => { generateCity(); buildSpatialGrid(); spawnTraffic(); spawnEnemies(); spawnRings(); spawnOrbs(); spawnPowerUps(); spawnSmokeColumns(); };
+    /* Casting is enumerated explicitly (it costs a shadow-map draw per object),
+     * but *receiving* is just a shader branch on an already-shared material, so
+     * it's safe to blanket-apply to every lit surface. Without this the sun's
+     * shadows land on the base ground plane and are then hidden by the road,
+     * lot and sidewalk meshes drawn on top of it. */
+    const enableShadowReceiving = () => {
+        scene.traverse(o=>{
+            if(!o.isMesh || o.receiveShadow) return;
+            const m = o.material;
+            const lit = Array.isArray(m) ? m.some(x=>x && x.isMeshStandardMaterial) : (m && m.isMeshStandardMaterial);
+            if(lit) o.receiveShadow = true;
+        });
+    };
+    const initWorld = () => { generateCity(); buildSpatialGrid(); spawnTraffic(); spawnEnemies(); spawnRings(); spawnOrbs(); spawnPowerUps(); spawnSmokeColumns(); enableShadowReceiving(); };
     bootRoomSeed ? withSeededRandom(`room:${bootRoomSeed}`, initWorld) : initWorld();
 }catch(e){console.error('Init error:',e);}
 
@@ -4169,9 +4564,13 @@ function animate(){
         clock.getDelta();
         return;
     }
-    if(S.mode==='paused'){renderer.render(scene,camera);return;}
+    if(S.mode==='paused'){postfx.render(0);return;}
 
     const dt=Math.min(clock.getDelta(),.05);
+    if(launchGrace>0){
+        launchGrace=Math.max(0,launchGrace-dt);
+        if(launchGrace===0) notify('WEAPONS FREE — HOSTILES ENGAGING','kill-note');
+    }
     updateWater(dt);
     S.invTimer=Math.max(0,S.invTimer-dt); fCD-=dt;
     WORLD.missionSec += dt;
@@ -4588,8 +4987,8 @@ function animate(){
         camera.lookAt(drone.position);
     }
 
-    stars.position.set(camera.position.x,0,camera.position.z);
-    skyDome.position.set(camera.position.x,0,camera.position.z);
+    /* Sky/clouds/stars recentre on the drone and the shadow frustum tracks it. */
+    atmo.update(dt, drone.position);
 
     updEnemies(dt); updBullets(dt); updEBullets(dt); updBooms(dt); updRings(dt); updOrbs(dt);
     updTraffic(dt); updPowerUps(dt); updTrail(dt); updateRemotePilots(dt); trackOnlineState().catch(()=>{});
@@ -4611,9 +5010,16 @@ function animate(){
     boostLines.style.opacity=S.boosting&&S.boost>0?'1':'0';
 
     updHUD(curSpeed,dt); updMinimap();
-    renderer.render(scene,camera);
+    postfx.setDamage(Math.max(0, 1 - S.hp/C.maxHP) * 0.75);
+    renderer.info.reset();
+    postfx.render(dt);
+    updatePerf(dt);
     }catch(e){console.warn('Frame error:',e);}
 }
 
 animate(); showScreen('menu');
-window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+window.addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+    postfx.setSize(innerWidth,innerHeight);
+});
