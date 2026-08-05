@@ -8,7 +8,8 @@
     "dev": "vite --host 0.0.0.0",
     "preview": "vite preview --host 0.0.0.0",
     "check": "node check-module.mjs",
-    "vendor": "node scripts/vendor-three.mjs"
+    "vendor": "node scripts/vendor-three.mjs",
+    "stamp": "node scripts/stamp-assets.mjs"
   },
   "devDependencies": {
     "vite": "^5.4.11"

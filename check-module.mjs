@@ -9,6 +9,7 @@
  * down with "failed to start". Deleting a screen is exactly when they happen.
  */
 import { access, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,6 +52,7 @@ for (const checkFile of checkFiles) {
   }
 }
 
+const PAGES_TO_STAMP = ['./index.html', './game.html'];
 const problems = [];
 
 /* ---- 2. undeclared $handles ----
@@ -97,6 +99,26 @@ for (const [pagePath, scriptPath] of pages) {
     if (!ids.has(m[1])) {
       const line = script.slice(0, m.index).split('\n').length;
       problems.push(`${scriptPath}:${line}  #${m[1]} not found in ${pagePath}`);
+    }
+  }
+}
+
+/* ---- 4. asset cache-busters match file contents ----
+ * A ?v= token that does not track the file is worse than none: the browser
+ * keeps serving the previous version and the fix looks like it never shipped. */
+for (const page of PAGES_TO_STAMP) {
+  let html;
+  try { html = await readFile(new URL(page, import.meta.url), 'utf8'); }
+  catch { continue; }
+
+  for (const m of html.matchAll(/(?:src|href)="(\.\/[^"?]+\.(?:js|css))\?v=([^"]*)"/g)) {
+    let contents;
+    try { contents = await readFile(new URL(m[1], import.meta.url)); }
+    catch { continue; }
+
+    const want = createHash('sha256').update(contents).digest('hex').slice(0, 8);
+    if (m[2] !== want) {
+      problems.push(`${page}  ${m[1]}?v=${m[2]} is stale (expected ${want}) — run: npm run stamp`);
     }
   }
 }

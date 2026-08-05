@@ -62,6 +62,7 @@ npm run dev          # → http://localhost:5173
 | `npm run preview` | Production-style static preview |
 | `npm run check` | Parses `src/main.js` and reports syntax errors |
 | `npm run vendor` | Regenerates `vendor/` — see [Deploying](#deploying) |
+| `npm run stamp` | Re-fingerprints the `?v=` cache-busters after editing `src/` |
 
 **Needs:** Node 18+ and a WebGL2 browser. That's it.
 
@@ -200,6 +201,13 @@ three or adding a new addon import:
 ```bash
 npm run vendor
 ```
+
+Assets are fingerprinted the same way — no build step means nothing does it for
+you. `npm run stamp` rewrites every local `?v=` token to a hash of that file's
+contents, and `npm run check` fails if one is stale. This matters more than it
+sounds: with a hand-written token, shipping a fix without editing it by hand
+leaves every returning browser running the previous, broken file — the URL never
+changed, so the cache was right to keep what it had.
 
 `scripts/vendor-three.mjs` walks the import graph and copies what it reaches, so
 a missing addon is a loud error at vendor time instead of a blank screen in
