@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js';
 import { createPostFX } from './render/postfx.js';
+import { createOcean } from './render/ocean.js';
 import {
     CAMPAIGN, CHARACTERS, handlerFor, missionById, MissionDirector,
     STORY_LOCATIONS, normalizeProgress, isUnlocked, markComplete, defaultProgress,
@@ -742,6 +743,7 @@ const lampMaterials = [];
 function applyTimeOfDay(key){
     atmo.setTimeOfDay(key);
     postfx.applyPreset(key);
+    ocean.setTimeOfDay(key);
     for(const m of facadeMaterials){
         if(m.userData.baseEmissive === undefined) m.userData.baseEmissive = m.emissiveIntensity;
         m.emissiveIntensity = m.userData.baseEmissive * atmo.windowLights;
@@ -1303,8 +1305,12 @@ async function trackOnlineState(force=false){
 /* Sky, stars and clouds come from the atmosphere rig (src/render/atmosphere.js). */
 
 /* Ground */
-const gnd=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
+/* The city sits on an island now, so the ground is a disc a little inside the
+ * beach rather than a 3 km plane running past the horizon. createOcean() draws
+ * the shoreline and everything beyond it. */
+const gnd=new THREE.Mesh(new THREE.CircleGeometry(740,96),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
 gnd.rotation.x=-Math.PI/2; gnd.position.y=-0.1; tagShadows(gnd,false,true); scene.add(gnd);
+const ocean = createOcean(scene, { quality: isMobileGPU ? 'low' : 'high', timeOfDay: 'dusk' });
 
 /* ===== WINDOW TEXTURE GENERATOR (HD) ===== */
 const winTextures = [];
@@ -2457,6 +2463,38 @@ function updateWater(dt){
     }
 }
 
+/* ===== ROOFTOP BEACONS =====================================================
+ * Red anti-collision lights on the tall towers. Cheap — a sphere and a sine —
+ * and they do more for "this city is switched on" at night than anything else
+ * per vertex.
+ * ========================================================================= */
+const roofBeacons=[];
+function spawnRoofBeacons(){
+    const tall=buildings
+        .map(b=>({b, h:b.bbox.max.y}))
+        .filter(x=>x.h>34)
+        .sort((a,b)=>b.h-a.h)
+        .slice(0, isMobileGPU ? 14 : 30);
+    const geo=new THREE.SphereGeometry(0.7,6,6);
+    for(const {b,h} of tall){
+        const c=new THREE.Vector3();
+        b.bbox.getCenter(c);
+        const mat=new THREE.MeshBasicMaterial({color:0xff3b3b,transparent:true,opacity:0.9});
+        const m=new THREE.Mesh(geo,mat);
+        m.position.set(c.x, h+1.4, c.z);
+        scene.add(m);
+        /* Staggered so the skyline blinks out of step, like real obstruction
+         * lighting rather than a string of fairy lights. */
+        roofBeacons.push({mat, mesh:m, phase:Math.random()*Math.PI*2, rate:0.9+Math.random()*0.5});
+    }
+}
+function updRoofBeacons(t){
+    for(const b of roofBeacons){
+        const pulse=Math.sin(t*b.rate+b.phase);
+        b.mat.opacity = pulse>0.55 ? 0.95 : 0.06;
+    }
+}
+
 /* ===== MOVING TRAFFIC ===== */
 const traffic=[];
 const tCarGeo=new THREE.BoxGeometry(1.6,.7,3.2);
@@ -2464,7 +2502,9 @@ const tCarTopGeo=new THREE.BoxGeometry(1.3,.55,1.8);
 const tCarCols=[0xd0d0d0,0x303030,0xb02020,0x2040a0,0xe0e0e0,0x707070,0x906820,0x404040,0x204080,0xa0a090,0x205028,0x808080];
 function spawnTraffic(){
     const blocks=Math.floor(C.citySize/C.blockSize),half=blocks/2;
-    for(let n=0;n<20;n++){
+    /* Twenty cars across a 500 m grid reads as a ghost town from the air. */
+    const carCount = isMobileGPU ? 26 : 52;
+    for(let n=0;n<carCount;n++){
         const isH=Math.random()>.5;
         const lane=Math.floor(Math.random()*(blocks+1));
         const roadPos=(lane-half)*C.blockSize;
@@ -4729,6 +4769,7 @@ else try{
         ['Deploying hostiles',   () => spawnEnemies()],
         ['Placing objectives',   () => { spawnRings(); spawnOrbs(); spawnPowerUps(); }],
         ['Raising smoke',        () => spawnSmokeColumns()],
+        ['Lighting towers',      () => spawnRoofBeacons()],
         ['Casting shadows',      () => enableShadowReceiving()],
         /* Compiling here moves the first-frame shader stall — which is the other
          * half of the "it hung" report — inside the progress bar. */
@@ -5194,6 +5235,8 @@ function animate(){
 
     /* Sky/clouds/stars recentre on the drone and the shadow frustum tracks it. */
     atmo.update(dt, drone.position);
+    ocean.update(dt, drone.position);
+    updRoofBeacons(bT*0.001);
 
     updEnemies(dt); updBullets(dt); updEBullets(dt); updBooms(dt); updRings(dt); updOrbs(dt);
     updTraffic(dt); updPowerUps(dt); updTrail(dt); updateRemotePilots(dt); trackOnlineState().catch(()=>{});
