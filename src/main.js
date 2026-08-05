@@ -1234,6 +1234,21 @@ async function connectOnlineRoom(options={}){
         onlineChannel.on('presence',{event:'sync'},()=>{
             const state=onlineChannel.presenceState();
             onlinePresenceCount = Object.values(state).reduce((n,rows)=>n+(Array.isArray(rows)?rows.length:0),0);
+            /* trackOnlineState() puts the whole onlinePayload() into presence, so
+             * every row here is a pilot's last known state — position included.
+             * Feeding it through the normal path is what makes an already-flying
+             * host pick up a pilot who joined after them.
+             *
+             * Before this, a pilot was only ever created from a 'state'
+             * broadcast. The joiner saw the host because the host answers 'join'
+             * with its state; nothing sent the reverse, so the host stayed empty
+             * until it reloaded and its own 'join' triggered the same reply from
+             * the other side. That is the asymmetry, and presence already had
+             * the data to close it. */
+            for(const rows of Object.values(state)){
+                if(!Array.isArray(rows)) continue;
+                for(const row of rows) handleRemoteState(row);
+            }
             updateOnlineStatus();
         });
         onlineChannel.on('broadcast',{event:'state'},payload=>{
@@ -1244,6 +1259,9 @@ async function connectOnlineRoom(options={}){
             if(!join || join.id===onlineClientId) return;
             onlineStats.joins++;
             sendOnlineBroadcast('state', onlinePayload());
+            /* Refresh presence too, so the newcomer's first sync already has us
+             * rather than waiting up to 2s for the next throttled track(). */
+            trackOnlineState(true).catch(()=>{});
             notify(`ROOM CONTACT ${join.name||'REMOTE'}`,'ring-note');
         });
         onlineChannel.on('broadcast',{event:'hit'},payload=>receiveOnlineHit(payload.payload));
@@ -3577,9 +3595,38 @@ function updateGamepadLiveUI(){
 
 /* ===== COLLISIONS (spatial-grid accelerated) ===== */
 const _pushDir = new THREE.Vector3();
+
+/* Where the drone was at the previous collision pass. prevPos is already taken:
+ * it is reset earlier in the same frame for the distance counter, so by the time
+ * we run it equals the current position and is useless as a sweep origin. */
+const _sweepFrom = new THREE.Vector3();
+const _segAB = new THREE.Vector3(), _segAP = new THREE.Vector3();
+const _segHit = new THREE.Vector3();
+
+/* Squared distance from segment a→b to point p, writing the closest point on the
+ * segment into out. Point tests only sample where the drone *is*; at 48 m/s —
+ * 77 with boost — a frame moves it up to 3.8 m, further than the 3.5 m contact
+ * radius, so an aircraft could be behind you before any frame saw it. Sweeping
+ * the whole path closes that. */
+function segPointDistSq(a, b, p, out){
+    _segAB.subVectors(b, a);
+    const lenSq = _segAB.lengthSq();
+    const t = lenSq > 1e-8
+        ? THREE.MathUtils.clamp(_segAP.subVectors(p, a).dot(_segAB) / lenSq, 0, 1)
+        : 0;
+    out.copy(a).addScaledVector(_segAB, t);
+    return out.distanceToSquared(p);
+}
+
 function droneCollisions(){
     const r=1.8;
     const dp = drone.position;
+
+    /* A spawn, respawn or battle-room offset moves the drone far further than a
+     * frame ever could. Sweeping across that jump would collide with everything
+     * on the line, so treat any implausible step as a teleport and fall back to
+     * a point test for this frame. 77 m/s at the 0.05 s dt clamp is under 4 m. */
+    if(_sweepFrom.distanceToSquared(dp) > 30*30) _sweepFrom.copy(dp);
     const nearbyBldgs=getNearbyBuildings(dp.x, dp.z);
     for(const b of nearbyBldgs){
         const bb = b.bbox;
@@ -3619,8 +3666,11 @@ function droneCollisions(){
             break;
         }
     }
+    /* Hostiles: ramming still trades your hull for the kill, but the test now
+     * sweeps the frame's whole path instead of sampling one point. */
+    const ramR = 3.5;
     for(let j=enemies.length-1;j>=0;j--){
-        if(drone.position.distanceTo(enemies[j].position)<3.5){
+        if(segPointDistSq(_sweepFrom, dp, enemies[j].position, _segHit) < ramR*ramR){
             if(S.invTimer<=0) takeDmg(C.enemyDmg);
             boom(enemies[j].position.clone());scene.remove(enemies[j]);enemies.splice(j,1);S.kills++;
             sndBoom(true);
@@ -3628,6 +3678,35 @@ function droneCollisions(){
             setTimeout(mkEnemy,15000);break;
         }
     }
+
+    /* Remote pilots are aircraft too. They had no collision at all, so in a
+     * battle room you flew straight through the other player. They are not ours
+     * to delete, so this is a solid bounce plus damage to both. */
+    const remoteR = 4.0;
+    for(const [id, rp] of remotePilots){
+        if(!rp.state || !rp.mesh.visible) continue;
+        const target = rp.mesh.position;
+        if(segPointDistSq(_sweepFrom, dp, target, _segHit) >= remoteR*remoteR) continue;
+
+        _pushDir.subVectors(dp, target);
+        if(_pushDir.lengthSq() < 1e-6) _pushDir.set(0, 1, 0);
+        _pushDir.normalize();
+        dp.copy(target).addScaledVector(_pushDir, remoteR + 0.5);
+
+        const vDot = vel.dot(_pushDir);
+        if(vDot < 0) vel.addScaledVector(_pushDir, -vDot * 1.6);
+        vel.multiplyScalar(0.35);
+
+        const now = performance.now();
+        if(S.invTimer<=0 && now-lastImpactAt>450){
+            lastImpactAt = now;
+            takeDmg(C.multiplayerDmg, 'COLLISION');
+            sendOnlineHit(id, target);
+        }
+        break;
+    }
+
+    _sweepFrom.copy(dp);
 }
 function takeDmg(n, sourceLabel=''){
     if(S.mode==='gameover') return;
