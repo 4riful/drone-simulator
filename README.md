@@ -1,131 +1,148 @@
+<img src="assets/logo.svg" align="right" width="112" alt="">
+
 # Drone Simulator
 
-<p align="center">
-  <img src="./logo.png" alt="Drone Simulator logo" width="120">
-</p>
+A browser flight sim: fly a quadcopter or a scout helicopter over a procedural
+city, run a 7-mission story campaign, and shoot at hostile drones. Three.js for
+rendering, Vite for the dev server, no engine and no asset pipeline — the whole
+world is generated in code.
 
-Browser-playable drone simulator prototype built with Three.js, a terminal-style cockpit UI, local pilot profiles, multiple game modes, and a roadmap toward a more physically correct flight model.
+**Play:** https://4riful.github.io/drone-simulator/ (see [Deploying](#deploying) — the
+Pages build is currently broken)
 
-**Play now:** https://4riful.github.io/drone-simulator/
+It is a *game* with simulator ambitions, not a trainer. The flight controller is
+assisted and the combat is client-authoritative. Both are documented below so you
+know what you are getting.
 
-## Status
+## Run it
 
-This project is playable today, but it is still a simulator-game prototype. The public homepage is separated from the gameplay page so the first screen stays clean, responsive, and does not load the WebGL runtime in the background. The current flight controller is assisted and partly game-like; `docs/FLIGHT_MODEL_PLAN.md` documents the next step toward a force/torque model.
-
-## Current Features
-
-- Playable directly from GitHub Pages with a dedicated terminal-themed landing page and gameplay page.
-- Three.js city environment with buildings, roads, river/canal crossings, named districts, traffic, smoke, particles, and weather effects.
-- Drone and helicopter vehicle modes.
-- Game modes: Single, Training, Mission, Free Flight, and Online Battle.
-- Pilot profiles stored locally with callsign, persona, preferred mode, sorties, score, range, kills, waypoints, and flight time, with optional Supabase cloud-sync tables documented.
-- Profile personas: Recon Specialist, Combat Pilot, Test Pilot, and Instructor.
-- Assisted flight systems with wind, gusts, turbulence, air-density loss, ground effect, fuel, battery voltage, signal strength, GPS status, and warning messages.
-- Combat loop with hostile drones, lock/follow assist, projectiles, explosions, health, score, waypoints, orbs, and power-ups.
-- Battle profile insight panel with previous records, recent performance, cloud-sync status, and profile stats.
-- HUD instruments for heading, speed, altitude, attitude, hull, boost, fuel, battery, signal, GPS, air density, threats, mode, and mission warnings.
-- Help screen with controls, mode explanations, profile notes, and simulator limitations.
-- Keyboard, mouse, and gamepad support.
-
-## Free Online Multiplayer Setup
-
-GitHub Pages can host the static game, but it cannot run an authoritative multiplayer server by itself. The free path implemented here is **Supabase Realtime**: Broadcast carries fast drone state and hit events, while Presence tracks who is in the room.
-
-The app is already configured with the project's public Supabase key.
-
-Battle room networking uses Supabase Realtime. Battle profile cloud sync is optional and needs the SQL tables in `docs/SUPABASE_BATTLE_PROFILE_SETUP.md`; without those tables, records stay local and the UI reports cloud sync as pending.
-
-1. Open the simulator and choose **Online Battle**.
-2. Click **Create Battle** to generate a code such as `DRN-482K`.
-3. Click **Copy Invite** and share it with player two.
-4. Player two opens the invite URL or enters the same battle code and clicks **Join Battle**.
-5. Both players launch the same battle room.
-6. Both players see synced remote aircraft, HUD online count, and radar/minimap contacts.
-
-Current Online Battle syncs callsign, persona, aircraft, position, rotation, velocity, health, fuel, and hit events as remote aircraft. Combat hit validation is still client-side prototype logic and should become authoritative later. The deeper create/join plan is documented in `docs/FREE_MULTIPLAYER_SETUP.md`.
-
-## Controls
-
-- `W/S` or arrow up/down: pitch forward/back.
-- `A/D`: roll/strafe left/right.
-- `Q/E` or arrow left/right: yaw.
-- `Space`: climb.
-- `Shift`: descend.
-- `F` or mouse: fire.
-- `Tab`: boost.
-- `B` or `Ctrl`: emergency brake.
-- `T`: lock target.
-- `L`: follow locked target.
-- `H`: help.
-- `Esc` or `P`: pause.
-- Gamepad Mode 2 is supported when connected.
-
-## Development
-
-Requirements:
-
-- Node.js 18 or newer.
-- A modern browser with WebGL support.
-
-Install dependencies:
+Node 18+, a WebGL2 browser.
 
 ```bash
 npm install
+npm run dev      # vite dev server on 0.0.0.0
+npm run check    # parse src/main.js and report syntax errors
+npm run preview  # production-style static preview
 ```
 
-Run the local dev server:
+`index.html` is the landing page (mode + aircraft pick, no WebGL). `game.html` is
+the simulator. They are separate documents so the first paint never pays for the
+renderer.
 
-```bash
-npm run dev
+## Flight model
+
+The controller is a **per-axis target-velocity integrator**, not rigid-body
+physics. Stick input picks a target velocity in the yaw frame; the drone
+accelerates toward it at a fixed rate. Pitch and roll are *visual* — the airframe
+banks to sell the motion, it does not generate it. Yaw is the only axis with real
+angular velocity and damping.
+
+Tuning lives in `C` at the top of `src/main.js`:
+
+| | |
+|---|---|
+| Max thrust | 42 m/s² (~4.3 : 1 thrust/weight) |
+| Top speed | 48 m/s horizontal (~173 km/h), 20 m/s vertical |
+| Max tilt | 0.78 rad (~45°) |
+| Yaw | 3.5 rad/s, accel 12, damping 5 |
+| Motor lag | 40 ms input smoothing |
+| Ground effect | +20% lift below 5 m |
+
+Layered on top: wind, gusts, turbulence, air density falling with altitude
+(1.0 → 0.82), fuel burn scaled by throttle and boost, battery voltage derived
+from fuel and load (25.2 → 18.0 V), signal strength that decays with distance
+from base and low altitude, and a GPS fix that drops 3D → 2D → NO FIX as signal
+degrades. Running the tank dry triggers a 5-second engine-failure countdown and
+then an unpowered fall.
+
+`docs/FLIGHT_MODEL_PLAN.md` is the plan for replacing this with force/torque.
+
+Two airframes, defined by multipliers on the same controller: **MQ-9 Reaper**
+(baseline) and **MQ-8B Fire Scout** (0.82× speed, 0.65× tilt, heavier throttle
+response).
+
+## Controls
+
+| Key | | Key | |
+|---|---|---|---|
+| `W` `S` / `↑` `↓` | forward / back | `F` / mouse | fire |
+| `A` `D` | strafe left / right | `Tab` | boost |
+| `Q` `E` / `←` `→` | yaw | `B` / `Ctrl` | emergency brake |
+| `Space` | climb | `T` | lock target |
+| `Shift` | descend | `L` | follow assist (needs a lock) |
+| `R` `V` | pitch trim | `C` | camera distance |
+| `H` | help | `Esc` / `P` | pause |
+
+Gamepad (Mode 2) is picked up when connected, with deadzone/expo/sensitivity and
+per-axis inversion in the control settings. Touch builds get dual sticks plus
+fire / boost / up / down / lock / brake buttons.
+
+## What's in the build
+
+- **City** — 500 m grid, 84 m blocks, procedural buildings, roads, two waterways
+  and a bridge, four named districts, an airstrip and a harbor yard, moving
+  traffic, neon signage, rain, smoke and particles, and a time-of-day atmosphere
+  with post-processing.
+- **Campaign** — *Operation Andromeda*, 7 missions in 3 acts, gated by progress,
+  driven by an objective state machine (`src/story/campaign.js`) with two
+  handlers on the radio, per-mission briefs and debriefs, and saved best scores.
+- **Free modes** — Single, Training (no hostiles, 0.35× score), Mission
+  (1.25× score), Free Flight, Online Battle.
+- **Combat** — 7 hostile drones, 260 m/s projectiles, 110 ms fire rate, 150 HP,
+  lock-on and follow assist, rings, orbs, power-ups, explosions.
+- **Pilots** — local profiles with callsign, sorties, score, range, kills and
+  flight time, plus four personas (Recon / Combat / Test / Instructor) that
+  trade score multiplier against fuel burn and signal.
+- **HUD** — heading, speed, altitude, attitude, hull, boost, fuel, battery,
+  signal, GPS, air density, threats, radar/minimap, kill feed, warnings.
+
+## Online Battle
+
+Two-player rooms over **Supabase Realtime**: Broadcast carries drone state and
+hit events, Presence tracks who is in the room. GitHub Pages cannot host an
+authoritative server, so this is the free path.
+
+Create a battle → copy the invite (`DRN-482K`) → the other pilot joins with the
+link or the code. Synced: callsign, persona, aircraft, position, rotation,
+velocity, health, fuel, hits.
+
+**Hit validation is client-side.** Anyone can edit their own damage. Making it
+authoritative is a to-do, not a shipped feature. Setup notes are in
+`docs/FREE_MULTIPLAYER_SETUP.md`; the optional cloud-sync tables for battle
+profiles are in `docs/SUPABASE_BATTLE_PROFILE_SETUP.md` (without them, records
+stay local and the UI reports sync as pending).
+
+## Deploying
+
+The pages import a bare specifier (`import * as THREE from 'three'`), which only
+resolves through Vite. Nothing in this repo builds or publishes, so GitHub Pages
+serves the raw sources and the module graph fails to load in the browser. Fixing
+it means either shipping `vite build` output or adding an import map to
+`game.html`. That is the top item on the list below.
+
+## Layout
+
+```
+index.html            landing page          src/home.js, src/home.css
+game.html             simulator shell       src/styles.css
+src/main.js           5k lines: state, world gen, flight loop, HUD, audio,
+                      input, storage, networking — not yet split
+src/render/           atmosphere + post-processing
+src/story/campaign.js campaign data and the MissionDirector
+check-module.mjs      syntax check for npm run check
+docs/                 flight model plan, multiplayer setup, Supabase SQL
 ```
 
-Check the simulator module for JavaScript syntax errors:
+## Known gaps
 
-```bash
-npm run check
-```
+- No build or deploy step; the live Pages site is broken (see above).
+- `src/main.js` is one 5,000-line module. Splitting it into state / input / world
+  / entities / sim / UI is the next structural job.
+- Flight is target-velocity, not rigid-body. No torque, no per-motor thrust.
+- Multiplayer hit detection is client-authoritative.
+- Profiles are browser-local (IndexedDB with a localStorage fallback).
+- No automated tests — `npm run check` only parses.
+- No LICENSE file yet.
 
-Preview a production-style local server:
-
-```bash
-npm run preview
-```
-
-## Project Shape
-
-- `index.html`: standalone responsive landing page for mode, aircraft, launch, and build information.
-- `game.html`: playable simulator page with menu screens, HUD, help, and runtime markup.
-- `src/home.css`: landing page styling.
-- `src/home.js`: landing page selection and launch-link logic.
-- `src/styles.css`: terminal UI, cockpit HUD, menu, profile, help, and responsive styling.
-- `src/main.js`: Three.js simulator logic, game state, world generation, flight loop, HUD, audio, storage, and input handling.
-- `docs/FLIGHT_MODEL_PLAN.md`: engineering plan for replacing target-velocity movement with a physical force/torque model.
-- `docs/FREE_MULTIPLAYER_SETUP.md`: free Supabase Realtime setup for Online Battle rooms.
-- `docs/SUPABASE_BATTLE_PROFILE_SETUP.md`: optional Supabase SQL for battle profiles, runs, public leaderboards, and author/player pages.
-- `check-module.mjs`: syntax check for the simulator module.
-- `ROADMAP.md`: phased project direction.
-- `ATTRIBUTIONS.md`: open-resource credits.
-
-## Theme And Resources
-
-- Clean terminal-command-center UI theme.
-- JetBrains Mono font, licensed under OFL-1.1.
-- Tabler Icons visual language, licensed under MIT.
-- Three.js powers the procedural 3D graphics.
-- Game visuals are generated procedurally in code.
-
-## Roadmap
-
-- Split `src/main.js` into focused modules for state, storage, input, UI, world, entities, and simulation.
-- Install Three.js locally instead of importing it from a CDN.
-- Replace the assisted target-velocity controller with a real force/torque flight model.
-- Add training lessons, landing scoring, debriefs, telemetry replay, and better mission design.
-- Connect a realtime backend for actual online rooms.
-- Add automated browser smoke tests.
-
-## Known Limitations
-
-- The current flight loop still uses target horizontal and vertical velocities rather than full rigid-body physics.
-- Online Battle uses Supabase Realtime presence, not an authoritative combat server.
-- Profile data is local to the browser through IndexedDB/localStorage fallback.
-- No official license file has been added yet.
+`ROADMAP.md` has the phased plan. `ATTRIBUTIONS.md` credits JetBrains Mono
+(OFL-1.1), Tabler Icons (MIT), and Three.js.
