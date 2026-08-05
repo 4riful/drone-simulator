@@ -3906,7 +3906,7 @@ function applyVehicleMode(){
 function applySettingsToUI(){
     $setDeadzone.value=controlCfg.deadzone; $setExpo.value=controlCfg.expo;
     $setPitchS.value=controlCfg.sensPitch; $setRollS.value=controlCfg.sensRoll; $setYawS.value=controlCfg.sensYaw; $setThrS.value=controlCfg.sensThrottle;
-    $vehicleMenu.value=controlCfg.vehicleMode; $vehicleSet.value=controlCfg.vehicleMode;
+    $vehicleSet.value=controlCfg.vehicleMode;
     $invLX.checked=controlCfg.invertLX; $invLY.checked=controlCfg.invertLY; $invRX.checked=controlCfg.invertRX; $invRY.checked=controlCfg.invertRY;
     $setDeadzoneV.textContent=Number(controlCfg.deadzone).toFixed(2);
     $setExpoV.textContent=Number(controlCfg.expo).toFixed(2);
