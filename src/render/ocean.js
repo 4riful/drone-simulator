@@ -104,53 +104,70 @@ export function createOcean(scene, opts = {}) {
                 #include <common>
                 uniform float uTime;
                 uniform float uWave;
+                uniform float uShore;
                 varying vec3 vWPos;
                 varying float vWaveH;
 
-                /* Gerstner-style: each wave also pulls the surface horizontally
-                 * toward its crest, which is what sharpens peaks and flattens
-                 * troughs. Pure sine displacement gives rolling hills — readable
-                 * as "water" only because it is blue.
+                /* Gerstner: each train also pulls the surface horizontally toward
+                 * its crest, which sharpens peaks and flattens troughs. Pure sine
+                 * gives rolling hills that only read as water because they are
+                 * blue.
                  *
-                 * xy = horizontal pull, z = height. Four trains at different
-                 * angles, wavelengths and speeds; fewer than that and the
-                 * interference pattern repeats visibly from the air. */
-                vec3 gerstner(vec2 p, vec2 dir, float steep, float len, float speed){
+                 * Amplitude is given directly. Deriving it from steepness/k the
+                 * textbook way produced an 11 m amplitude for the longest train
+                 * and ~20 m of total crest, which drowned the island and
+                 * z-fought the beach.
+                 *
+                 * Returns world-space (x, z) pull in .xy and height in .z. */
+                vec3 gerstner(vec2 p, vec2 dir, float amp, float len, float speed, float steep){
                     float k = 6.28318 / len;
                     float f = k * (dot(dir, p) - speed * uTime);
-                    float a = steep / k;
-                    return vec3(dir * a * cos(f), a * sin(f));
+                    return vec3(dir * steep * amp * cos(f), amp * sin(f));
                 }
-                vec3 waves(vec2 p){
+                vec3 waves(vec2 worldXZ){
                     vec3 w = vec3(0.0);
-                    w += gerstner(p, normalize(vec2( 1.0,  0.35)), 0.62, 118.0, 11.0);
-                    w += gerstner(p, normalize(vec2(-0.6,  1.0 )), 0.48,  73.0,  8.5);
-                    w += gerstner(p, normalize(vec2( 0.75, -0.8)), 0.32,  41.0,  6.5);
-                    w += gerstner(p, normalize(vec2(-0.2, -1.0 )), 0.22,  23.0,  4.5);
-                    return w * uWave;
+                    w += gerstner(worldXZ, normalize(vec2( 1.0,  0.35)), 0.95, 118.0, 11.0, 0.55);
+                    w += gerstner(worldXZ, normalize(vec2(-0.6,  1.0 )), 0.52,  73.0,  8.5, 0.5);
+                    w += gerstner(worldXZ, normalize(vec2( 0.75, -0.8)), 0.26,  41.0,  6.5, 0.45);
+                    w += gerstner(worldXZ, normalize(vec2(-0.2, -1.0 )), 0.13,  23.0,  4.5, 0.4);
+                    /* Swell shoals and dies as it runs into the beach. Also keeps
+                     * crests from ever reaching the sand. */
+                    float shoal = smoothstep(uShore - 30.0, uShore + 300.0, length(worldXZ));
+                    return w * uWave * shoal;
                 }
             `)
             /* The normal has to be set in beginnormal_vertex: <normal_vertex>
              * writes vNormal before begin_vertex ever runs, so perturbing it
              * afterwards would either be overwritten or, with FLAT_SHADED, refer
-             * to a varying that was never declared. */
+             * to a varying that was never declared.
+             *
+             * Object axes vs world: the plane is rotated -90deg about X, so
+             * object +x is world +x, object +y is world -z, and object +z is
+             * world up. The y-offset sample is therefore taken at world -z. */
             .replace('#include <beginnormal_vertex>', `
                 #include <beginnormal_vertex>
                 {
-                    vec3 w0 = waves(position.xy);
-                    vec3 wx = waves(position.xy + vec2(2.5, 0.0));
-                    vec3 wy = waves(position.xy + vec2(0.0, 2.5));
-                    objectNormal = normalize(vec3(-(wx.z - w0.z), -(wy.z - w0.z), 2.5));
+                    vec2 wxz = (modelMatrix * vec4(position, 1.0)).xz;
+                    float h0 = waves(wxz).z;
+                    float hx = waves(wxz + vec2(2.5, 0.0)).z;
+                    float hy = waves(wxz + vec2(0.0, -2.5)).z;
+                    objectNormal = normalize(vec3(-(hx - h0), -(hy - h0), 2.5));
                 }
             `)
+            /* Sampling in world space is what makes the plane's re-centring
+             * invisible. Sampled in local space the entire wave field travelled
+             * with the mesh and snapped 40 m every time it moved, which looked
+             * like the whole ocean blinking. */
             .replace('#include <begin_vertex>', `
                 #include <begin_vertex>
                 {
-                    vec3 w = waves(position.xy);
-                    transformed.xy += w.xy;
-                    transformed.z  += w.z;
+                    vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz;
+                    vec3 w = waves(wp.xz);
+                    transformed.x += w.x;
+                    transformed.y -= w.y;
+                    transformed.z += w.z;
                     vWaveH = w.z;
-                    vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                    vWPos = vec3(wp.x + w.x, wp.y + w.z, wp.z + w.y);
                 }
             `);
 
@@ -174,9 +191,9 @@ export function createOcean(scene, opts = {}) {
                     float shallowT = smoothstep(uShore + 420.0, uShore - 20.0, d);
                     vec3 water = mix(uDeep, uShallow, shallowT);
                     /* Breaking crests, and a band of surf along the shoreline. */
-                    float crest = smoothstep(0.55, 1.5, vWaveH);
-                    float surf = 1.0 - smoothstep(0.0, 55.0, abs(d - uShore));
-                    water = mix(water, uFoam, clamp(crest * 0.45 + surf * 0.55, 0.0, 1.0));
+                    float crest = smoothstep(0.55, 1.2, vWaveH);
+                    float surf = 1.0 - smoothstep(0.0, 45.0, abs(d - uShore));
+                    water = mix(water, uFoam, clamp(crest * 0.35 + surf * 0.5, 0.0, 1.0));
                     diffuseColor.rgb = water;
                 }
             `)
@@ -187,7 +204,7 @@ export function createOcean(scene, opts = {}) {
                 #include <emissivemap_fragment>
                 {
                     float fres = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 4.0);
-                    totalEmissiveRadiance += uSky * fres * (0.10 + uSun * 0.30);
+                    totalEmissiveRadiance += uSky * fres * (0.08 + uSun * 0.22);
                 }
             `);
     };

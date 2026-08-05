@@ -2486,7 +2486,7 @@ function spawnRoofBeacons(){
         .map(b=>({b, h:b.bbox.max.y}))
         .filter(x=>x.h>34)
         .sort((a,b)=>b.h-a.h)
-        .slice(0, isMobileGPU ? 14 : 30);
+        .slice(0, isMobileGPU ? 6 : 12);
     const geo=new THREE.SphereGeometry(0.7,6,6);
     for(const {b,h} of tall){
         const c=new THREE.Vector3();
@@ -2497,13 +2497,15 @@ function spawnRoofBeacons(){
         scene.add(m);
         /* Staggered so the skyline blinks out of step, like real obstruction
          * lighting rather than a string of fairy lights. */
-        roofBeacons.push({mat, mesh:m, phase:Math.random()*Math.PI*2, rate:0.9+Math.random()*0.5});
+        /* Real obstruction lights flash ~20-30 times a minute, not once a
+         * second, and thirty of them at once is just noise. */
+        roofBeacons.push({mat, mesh:m, phase:Math.random()*Math.PI*2, rate:0.42+Math.random()*0.18});
     }
 }
 function updRoofBeacons(t){
     for(const b of roofBeacons){
         const pulse=Math.sin(t*b.rate+b.phase);
-        b.mat.opacity = pulse>0.55 ? 0.95 : 0.06;
+        b.mat.opacity = pulse>0.82 ? 0.9 : 0.05;
     }
 }
 
