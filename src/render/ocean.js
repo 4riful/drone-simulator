@@ -275,7 +275,9 @@ export function createOcean(scene, opts = {}) {
         g.add(wake);
 
         /* Wide, slow circuits well outside the shoreline. */
-        const radius = 260 + i * 150;
+        /* Kept small enough that the near side of every circuit still clears
+         * the shoreline — wide orbits put boats up the high street. */
+        const radius = 170 + i * 65;
         boats.push({
             mesh: g, lamp,
             radius,
@@ -397,7 +399,7 @@ export function createOcean(scene, opts = {}) {
                 b.mesh.position.set(
                 Math.cos(b.angle) * b.radius,
                 0,
-                SHORE_Z + 420 + Math.sin(b.angle) * b.radius,
+                SHORE_Z + 780 + Math.sin(b.angle) * b.radius,
             );
                 b.mesh.rotation.y = -b.angle + (b.speed > 0 ? Math.PI / 2 : -Math.PI / 2);
                 b.bob += dt * 1.4;

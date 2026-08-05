@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js?v=b9d60f3a';
 import { createPostFX } from './render/postfx.js?v=25e17e76';
-import { createOcean, SHORE_Z } from './render/ocean.js?v=84ab1655';
+import { createOcean, SHORE_Z } from './render/ocean.js?v=42dd0235';
 import {
     CAMPAIGN, CHARACTERS, handlerFor, missionById, MissionDirector,
     STORY_LOCATIONS, normalizeProgress, isUnlocked, markComplete, defaultProgress,
@@ -5065,7 +5065,10 @@ function animate(){
     throttle = THREE.MathUtils.lerp(throttle, Math.min(1.0, targetThrottle), 1-Math.exp(-8*dt));
     const distFromBase = Math.hypot(drone.position.x, drone.position.z);
     const lowAltLoss = drone.position.y < 12 ? (12-drone.position.y)*0.7 : 0;
-    WORLD.signal = THREE.MathUtils.clamp(100 + getPersonaCfg().signalBonus - distFromBase*0.13 - lowAltLoss - WORLD.turbulence*5, 0, 100);
+    /* 0.13/m put the link in the red before the shoreline, which read as the
+     * game telling you not to go. 0.07 keeps a 3D fix over the beach and only
+     * degrades once you are properly offshore. */
+    WORLD.signal = THREE.MathUtils.clamp(100 + getPersonaCfg().signalBonus - distFromBase*0.07 - lowAltLoss - WORLD.turbulence*5, 0, 100);
     WORLD.gps = WORLD.signal<18 ? 'NO FIX' : (WORLD.signal<45 ? '2D' : '3D');
     WORLD.batteryV = THREE.MathUtils.clamp(18.6 + (WORLD.fuel/100)*6.6 - throttle*0.55 - (S.boosting?0.45:0), 18.0, 25.2);
     if(!fuelFalling){
@@ -5195,16 +5198,31 @@ function animate(){
 
     const curSpeed=Math.hypot(vel.x,vel.z);
 
-    /* 13. Boundaries (soft bounce with energy loss) */
-    const hf=C.citySize/2+60;
+    /* 13. Boundaries (soft bounce with energy loss)
+     *
+     * Asymmetric on purpose. The old box was citySize/2+60 = 310 m on every
+     * side, which sat 120 m short of the waterline — the sea was visible and
+     * literally unreachable. Seaward the limit now runs well past the surf so
+     * you can go out over the water and come back. */
+    const hf=C.citySize/2+180;                 /* inland and lateral */
+    const seaLimit=SHORE_Z+620;                /* how far out you may go */
     if(drone.position.x>hf){drone.position.x=hf;vel.x=-Math.abs(vel.x)*0.25;}
     if(drone.position.x<-hf){drone.position.x=-hf;vel.x=Math.abs(vel.x)*0.25;}
-    if(drone.position.z>hf){drone.position.z=hf;vel.z=-Math.abs(vel.z)*0.25;}
+    if(drone.position.z>seaLimit){drone.position.z=seaLimit;vel.z=-Math.abs(vel.z)*0.25;}
     if(drone.position.z<-hf){drone.position.z=-hf;vel.z=Math.abs(vel.z)*0.25;}
-    /* Ground collision: realistic -- hard landing damages */
-    if(drone.position.y<1.2){
-        drone.position.y=1.2;
-        if(vel.y<-5 && S.invTimer<=0){takeDmg(Math.round(-vel.y*0.8));vib(200,.6,.8);}
+
+    /* Ground collision: realistic -- hard landing damages.
+     * Over water the floor is the sea surface, so you can skim the swell
+     * instead of stopping on an invisible slab at street level. Ditching hurts
+     * more than a hard landing does. */
+    const overSea = drone.position.z > SHORE_Z;
+    const floorY = overSea ? 0.5 : 1.2;
+    if(drone.position.y<floorY){
+        drone.position.y=floorY;
+        if(vel.y<-5 && S.invTimer<=0){
+            takeDmg(Math.round(-vel.y*(overSea?1.15:0.8)), overSea?'DITCHED':'');
+            vib(200,.6,.8);
+        }
         else if(vel.y<-2){vib(60,.2,.3);} /* light bump */
         vel.y=Math.max(0,vel.y*-0.15); /* tiny bounce */
     }
