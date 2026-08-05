@@ -21,7 +21,7 @@ const GradeShader = {
         tDiffuse: { value: null },
         uTime: { value: 0 },
         uVignette: { value: 0.62 },
-        uGrain: { value: 0.055 },
+        uGrain: { value: 0.028 },
         uAberration: { value: 0.0016 },
         uContrast: { value: 1.06 },
         uSaturation: { value: 1.06 },
@@ -29,7 +29,7 @@ const GradeShader = {
         uGain: { value: new THREE.Vector3(1.02, 1.0, 0.98) },
         /* Damage / signal-loss feedback driven by the sim. */
         uDamage: { value: 0 },
-        uScanline: { value: 0.03 },
+        uScanline: { value: 0.012 },
     },
     vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -61,14 +61,20 @@ const GradeShader = {
             vec2 center = uv - 0.5;
             float r2 = dot(center, center);
 
-            // Horizontal tearing when the airframe is hurt / link is degraded.
-            if (uDamage > 0.001) {
-                float band = step(0.985 - uDamage * 0.25, hash(vec2(floor(uv.y * 90.0), floor(uTime * 12.0))));
-                uv.x += band * (hash(vec2(floor(uv.y * 90.0), uTime)) - 0.5) * 0.05 * uDamage;
+            // Horizontal tearing when the airframe is badly hurt.
+            //
+            // This used to start at uDamage > 0.001 — a single scratch of paint
+            // put blocky bands across the whole screen at 12 Hz, which reads as
+            // a broken TV rather than a damaged aircraft. It now stays off until
+            // the hull is genuinely in trouble and is a third as violent.
+            float tear = smoothstep(0.45, 1.0, uDamage);
+            if (tear > 0.001) {
+                float band = step(0.992 - tear * 0.18, hash(vec2(floor(uv.y * 70.0), floor(uTime * 7.0))));
+                uv.x += band * (hash(vec2(floor(uv.y * 70.0), uTime)) - 0.5) * 0.018 * tear;
             }
 
             // Lateral chromatic aberration, scaled by distance from the optical axis.
-            float ab = uAberration * (1.0 + uDamage * 4.0);
+            float ab = uAberration * (1.0 + uDamage * 1.8);
             vec2 dir = center * r2;
             vec3 color;
             color.r = texture2D(tDiffuse, uv + dir * ab).r;
@@ -95,10 +101,14 @@ const GradeShader = {
             color += n * uGrain * (1.0 - luma * 0.6);
 
             // Faint downlink scanlines.
-            color *= 1.0 - uScanline * (0.5 + 0.5 * sin(uv.y * 1400.0));
+            //
+            // The frequency is deliberately low. At uv.y * 1400 the pattern was
+            // ~3 px per cycle on a 720p panel, close enough to the pixel grid to
+            // beat against it and crawl as the camera moves.
+            color *= 1.0 - uScanline * (0.5 + 0.5 * sin(uv.y * 520.0));
 
             // Damage tint.
-            color = mix(color, vec3(color.r * 1.25, color.g * 0.72, color.b * 0.72), uDamage * 0.5);
+            color = mix(color, vec3(color.r * 1.25, color.g * 0.72, color.b * 0.72), uDamage * 0.32);
 
             gl_FragColor = vec4(max(color, 0.0), 1.0);
         }
@@ -167,7 +177,7 @@ export function createPostFX(renderer, scene, camera, opts = {}) {
         applyPreset(key) {
             const night = key === 'night';
             const storm = key === 'storm';
-            grade.uniforms.uGrain.value = night ? 0.10 : storm ? 0.07 : 0.045;
+            grade.uniforms.uGrain.value = night ? 0.055 : storm ? 0.04 : 0.025;
             grade.uniforms.uVignette.value = night ? 0.78 : 0.6;
             grade.uniforms.uSaturation.value = storm ? 0.9 : night ? 0.95 : 1.08;
             /* Night has far less scene luminance, so the HDR threshold drops to

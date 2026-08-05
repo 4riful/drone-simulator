@@ -79,6 +79,57 @@ for (const file of checkFiles) {
   }
 }
 
+/* ---- 3. top-level use before declaration ----
+ * Top-level statements run in order, so a const declared further down the file
+ * is in its temporal dead zone and throws at module scope — which takes the
+ * whole simulator down with "failed to start". Functions are hoisted, so the
+ * risk is only for unindented statements; this keys off column 0 rather than
+ * trying to parse scopes.
+ *
+ * Comments and quoted strings are removed line by line first. Without that,
+ * `getElementById('cmp-objectives')` reads as a use of `objectives`, and
+ * `{ rings: 0 }` as a use of `rings` — the object-key guard covers the latter. */
+for (const file of checkFiles) {
+  const code = await readFile(file, 'utf8');
+  const raw = code.split('\n');
+
+  let inBlock = false;
+  const lines = raw.map((line) => {
+    let out = line;
+    if (inBlock) {
+      const close = out.indexOf('*/');
+      if (close === -1) return '';
+      out = out.slice(close + 2);
+      inBlock = false;
+    }
+    out = out.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const open = out.indexOf('/*');
+    if (open !== -1) { inBlock = true; out = out.slice(0, open); }
+    return out
+      .replace(/\/\/.*$/, '')
+      .replace(/'(?:\\.|[^'\\])*'/g, "''")
+      .replace(/"(?:\\.|[^"\\])*"/g, '""');
+  });
+
+  const declLine = new Map();
+  lines.forEach((line, i) => {
+    const m = /^(?:const|let)\s+([A-Za-z_$][\w$]*)/.exec(line);
+    if (m && !declLine.has(m[1])) declLine.set(m[1], i);
+  });
+
+  lines.forEach((line, i) => {
+    if (/^\s/.test(line) || !line.trim()) return;          // indented => inside a body
+    if (/^(?:function|class|import|export)\b/.test(line)) return;
+    for (const [name, at] of declLine) {
+      if (at <= i) continue;
+      const esc = name.replace(/\$/g, '\\$');
+      /* Not after a dot/word, and not an object key (`name:`). */
+      const used = new RegExp(`(?<![\\w$.])${esc}(?![\\w$])(?!\\s*:)`).test(line);
+      if (used) problems.push(`${file}:${i + 1}  ${name} is used before its declaration on line ${at + 1}`);
+    }
+  });
+}
+
 /* ---- 3. getElementById targets ---- */
 const pages = [
   ['./game.html', './src/main.js'],

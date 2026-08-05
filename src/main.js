@@ -1,7 +1,7 @@
 
 import * as THREE from 'three';
 import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js?v=b9d60f3a';
-import { createPostFX } from './render/postfx.js?v=25e17e76';
+import { createPostFX } from './render/postfx.js?v=72aff081';
 import { createOcean, SHORE_Z } from './render/ocean.js?v=42dd0235';
 import {
     CAMPAIGN, CHARACTERS, handlerFor, missionById, MissionDirector,
@@ -686,13 +686,15 @@ const scene = new THREE.Scene();
  * back depth precision now that decals sit coplanar with the roads. */
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.5, 5000);
 const renderer = new THREE.WebGLRenderer({ antialias: false });
-renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.5));
+const isMobileGPU = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+/* 1.5 on a 3x phone screen renders at half resolution and upscales, which is
+ * the "pixelated" look. Desktop GPUs can afford 2. */
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, isMobileGPU ? 1.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();console.warn('WebGL context lost');});
 renderer.domElement.addEventListener('webglcontextrestored',()=>{console.log('WebGL context restored');});
 
-const isMobileGPU = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const atmo = createAtmosphere(scene, renderer, {
     shadowRadius: 170,
     shadowMapSize: isMobileGPU ? 1024 : 2048,
