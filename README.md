@@ -129,17 +129,18 @@ Riverfront, Industrial Yard), a forward airstrip and a harbor yard, moving
 traffic, neon signage, rain, smoke, particles, and a time-of-day atmosphere with
 post-processing.
 
-**🎯 The campaign** — *Operation Andromeda*: 7 missions across 3 acts, unlocked in
+**🎯 The campaign** — *Operation Andromeda*: 7 sorties across 3 acts, unlocked in
 sequence, driven by an objective state machine in `src/story/campaign.js`. Two
 handlers talk to you on the radio — Maj. Elena Voss and Col. Marcus Reyes — with
 a brief before and a debrief after every sortie. Best scores are saved per
-mission.
+sortie. Pick **Campaign** on the preflight page, or **Story Campaign** from the
+in-game menu.
 
 > First Light → Ghost Signal → Cut The Bridge → Blackout Run → Hornet's Nest →
 > The Handler → Last Light
 
-**🕹️ Free modes** — Single · Training (no hostiles, 0.35× score) · Mission
-(1.25× score) · Free Flight · Online Battle.
+**🕹️ Free modes** — Single (balanced sortie) · Training (no hostiles, 0.35×
+score) · Free Flight (open city, nothing shooting back) · Online Battle.
 
 **💥 Combat** — 7 hostile drones, 260 m/s projectiles, 110 ms fire rate, 150 HP
 hull, lock-on with follow assist, rings, orbs, power-ups, explosions.
@@ -209,13 +210,13 @@ button, rather than spinning forever.
 ## Project layout
 
 ```
-index.html              Landing page — mode + aircraft select, no WebGL
-game.html               Simulator shell — menus, HUD, help overlay
+index.html              Preflight — mode + airframe select, no WebGL
+game.html               Simulator shell — import map, menus, HUD, boot watchdog
 │
-├─ src/home.js          Landing page logic          (202 lines)
-├─ src/home.css         Landing page styling
+├─ src/home.js          Preflight logic             (192 lines)
+├─ src/home.css         Preflight styling
 ├─ src/styles.css       Terminal UI, cockpit HUD, menus, responsive
-├─ src/main.js          Everything else            (5,025 lines)
+├─ src/main.js          Everything else            (5,039 lines)
 │                       state · world gen · flight loop · HUD · audio
 │                       input · storage · networking
 ├─ src/render/
@@ -224,6 +225,7 @@ game.html               Simulator shell — menus, HUD, help overlay
 └─ src/story/
     └─ campaign.js      Campaign data + MissionDirector (465 lines)
 
+assets/logo.svg         The mark at the top of this file
 check-module.mjs        Syntax check behind `npm run check`
 scripts/                vendor-three.mjs — builds vendor/ for the static host
 vendor/                 Generated. three + the addons the game reaches
@@ -240,7 +242,8 @@ Ordered by how much they'd bother you.
 | 🟠 | Multiplayer hit detection is client-authoritative. |
 | 🟡 | Flight is target-velocity, not rigid-body — no torque, no per-motor thrust. |
 | 🟡 | Profiles are browser-local (IndexedDB, localStorage fallback). |
-| 🟡 | No automated tests — `npm run check` only parses. |
+| 🟡 | No automated tests — `npm run check` only parses. Nothing catches a broken module graph but a browser. |
+| 🟡 | `vendor/` is committed, so a `three` bump in `package.json` silently does nothing until someone runs `npm run vendor`. |
 | ⚪ | No LICENSE file yet. |
 
 `ROADMAP.md` has the phased plan.
