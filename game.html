@@ -6,6 +6,17 @@
     <title>Drone Simulator</title>
     <link rel="stylesheet" href="./src/styles.css?v=android-prompt-fullscreen-20260522-4">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- src/main.js imports the bare specifier 'three'. A bundler resolves that;
+         a plain static host (GitHub Pages) does not, so ship an import map and a
+         vendored copy of the ESM build. Keep this in sync with package.json. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./vendor/three.module.min.js",
+            "three/addons/": "./vendor/three/addons/"
+        }
+    }
+    </script>
 </head>
 <body class="is-landing">
 <script>
@@ -47,7 +58,7 @@
         <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
             <button class="mode-card active" type="button" data-mode="single" aria-pressed="true"><b>Single</b><span>Balanced solo sortie with hostiles and objectives.</span></button>
             <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
-            <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>Mission</b><span>Full combat mission with stronger scoring pressure.</span></button>
+            <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>Campaign</b><span>Operation Andromeda — 7 story sorties. Opens sortie select.</span></button>
             <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><b>Free Flight</b><span>Explore, practice landings, no enemies.</span></button>
             <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Battle</b><span>Two-player battle room with radar contacts.</span></button>
         </div>
@@ -369,6 +380,36 @@
 <div id="fuel-countdown"></div>
 <div id="fuel-warn-text"></div>
 <div id="game-meta"></div>
-<script type="module" src="./src/main.js?v=android-prompt-fullscreen-20260522-4"></script>
+<div id="boot-error" hidden>
+    <div>
+        <h2>Simulator failed to start</h2>
+        <p id="boot-error-detail">The 3D runtime did not load.</p>
+        <p class="boot-hint">Check the browser console, then reload. A stale cache is the usual cause.</p>
+        <div class="boot-actions">
+            <button class="btn btn-primary" type="button" onclick="location.reload()">Reload</button>
+            <a class="btn" href="./index.html">Back to setup</a>
+        </div>
+    </div>
+</div>
+<script type="module" src="./src/main.js?v=importmap-boot-20260805-1"></script>
+<script>
+    /* The direct-launch overlay says "Loading simulator..." and is cleared by
+     * main.js. If the module never executes (bad import, WebGL missing, syntax
+     * error) that overlay used to sit there forever. Fail loudly instead. */
+    (function () {
+        function fail(detail) {
+            if (window.__simBooted) return;
+            var box = document.getElementById('boot-error');
+            if (!box || !box.hidden) return;
+            document.body.classList.remove('direct-launch');
+            if (detail) document.getElementById('boot-error-detail').textContent = detail;
+            box.hidden = false;
+        }
+        addEventListener('error', function (e) {
+            if (e.message) fail(e.message);
+        });
+        setTimeout(function () { fail('The 3D runtime did not load within 20 seconds.'); }, 20000);
+    })();
+</script>
 </body>
 </html>

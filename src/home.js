@@ -1,137 +1,136 @@
+/* Preflight page. Collects mode + airframe (+ battle code) and hands them to
+ * game.html as query params; game.html's boot block takes it from there. */
+
 const MODES = {
-  single: 'Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.',
-  training: 'Safer flight school with combat pressure removed so you can learn controls.',
-  mission: 'Higher-pressure sortie with stronger scoring and combat objectives.',
-  freeflight: 'Open exploration mode for landing practice, camera work, and flight handling.',
-  multiplayer: 'Create or join a two-player battle room. The other pilot appears as a remote radar contact in-game.'
+  campaign: {
+    brief: 'Operation Andromeda: seven story sorties with a handler on the radio, briefed and debriefed.',
+    /* The campaign is reached through the game's "mission" mode, which opens
+     * the sortie select screen instead of dropping straight into a free flight. */
+    launchAs: 'mission',
+    label: 'Campaign',
+  },
+  single: {
+    brief: 'Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.',
+    launchAs: 'single',
+    label: 'Single',
+  },
+  training: {
+    brief: 'Flight school. No hostiles and softer scoring so you can learn the controls.',
+    launchAs: 'training',
+    label: 'Training',
+  },
+  freeflight: {
+    brief: 'Open city. Practice landings, camera work, and handling with nothing shooting back.',
+    launchAs: 'freeflight',
+    label: 'Free Flight',
+  },
+  multiplayer: {
+    brief: 'Create or join a two-player battle room. The other pilot shows up as a radar contact.',
+    launchAs: 'multiplayer',
+    label: 'Online Battle',
+  },
 };
 
 const AIRCRAFT = {
-  drone: 'MQ-9 Reaper: fixed-wing drone feel with higher speed and longer mission profile.',
-  helicopter: 'MQ-8B Fire Scout: rotorcraft profile for hover, low-speed control, and landing practice.'
-};
-
-const AIRCRAFT_LABELS = {
   drone: 'MQ-9 Reaper',
-  helicopter: 'MQ-8B Fire Scout'
+  helicopter: 'MQ-8B Fire Scout',
 };
 
 const SUPABASE_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const ONLINE_CONFIG = {
   url: 'https://edmvtxoteltikuwjxdsf.supabase.co',
-  key: 'sb_publishable_5OhCh1NLtCqrYjC6Y2AlOA_9zSA2K_8'
+  key: 'sb_publishable_5OhCh1NLtCqrYjC6Y2AlOA_9zSA2K_8',
 };
-
-const TERMINAL_LINES = [
-  '> tactical launcher armed',
-  '> mission cards synced to cockpit rail',
-  '> flight profile loaded and standing by',
-  '> radar contacts: remote pilot channel ready',
-  '> airframe selection locked for launch',
-  '> webgl combat deck: green to go'
-];
 
 let selectedMode = 'single';
 let selectedAircraft = 'drone';
 let supabaseModulePromise = null;
-let lastRoomCheck = { room: '', activePilots: 0, ok: false };
+let lastRoomCheck = { room: '', ok: false };
 
 const $brief = document.getElementById('brief');
-const $aircraftBrief = document.getElementById('aircraft-brief');
 const $launchNote = document.getElementById('launch-note');
 const $roomPanel = document.getElementById('room-panel');
 const $roomCode = document.getElementById('room-code');
 const $roomStatus = document.getElementById('room-status');
-const $terminalFeed = document.getElementById('terminal-feed');
-const $aircraftMenu = document.getElementById('aircraft-menu');
 
-function normalizeRoom(room) {
-  return String(room || '').toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
-}
+const normalizeRoom = (room) =>
+  String(room || '').toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
 
-function makeRoomCode() {
-  return `DRN-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-}
+const makeRoomCode = () => `DRN-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 function gameUrl() {
   const url = new URL('./game.html', location.href);
-  url.searchParams.set('mode', selectedMode);
+  url.searchParams.set('mode', MODES[selectedMode].launchAs);
   url.searchParams.set('aircraft', selectedAircraft);
-  const room = normalizeRoom($roomCode?.value);
   if (selectedMode === 'multiplayer') {
-    url.searchParams.set('room', room || makeRoomCode());
+    url.searchParams.set('room', normalizeRoom($roomCode.value) || makeRoomCode());
   }
   return url;
 }
 
-function updateSummary() {
-  $brief.textContent = MODES[selectedMode];
-  $launchNote.textContent = `${selectedMode.replace(/flight$/, ' flight').toUpperCase()} | ${AIRCRAFT_LABELS[selectedAircraft]}`;
-  $aircraftBrief.textContent = AIRCRAFT[selectedAircraft];
-  $roomPanel.classList.toggle('show', selectedMode === 'multiplayer');
-}
-
-function pushTerminal(line) {
-  if (!$terminalFeed) return;
-  const p = document.createElement('p');
-  p.textContent = line;
-  $terminalFeed.appendChild(p);
-  while ($terminalFeed.children.length > 4) $terminalFeed.firstElementChild.remove();
-}
-
-function setActive(selector, attr, value) {
-  document.querySelectorAll(selector).forEach((button) => {
+function setActive(group, attr, value) {
+  document.querySelectorAll(`#${group} [data-${attr}]`).forEach((button) => {
     const active = button.dataset[attr] === value;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   });
 }
 
+function updateSummary() {
+  $brief.textContent = MODES[selectedMode].brief;
+  $launchNote.textContent = `${MODES[selectedMode].label} · ${AIRCRAFT[selectedAircraft]}`;
+  $roomPanel.classList.toggle('show', selectedMode === 'multiplayer');
+}
+
 function selectMode(mode) {
+  if (!MODES[mode]) return;
   selectedMode = mode;
-  setActive('[data-mode]', 'mode', selectedMode);
-  if (selectedMode === 'multiplayer' && !$roomCode.value) $roomCode.value = makeRoomCode();
+  setActive('mode-grid', 'mode', mode);
+  if (mode === 'multiplayer' && !$roomCode.value) $roomCode.value = makeRoomCode();
   updateSummary();
 }
 
 document.getElementById('mode-grid').addEventListener('click', (event) => {
   const button = event.target.closest('[data-mode]');
-  if (!button) return;
-  selectMode(button.dataset.mode);
+  if (button) selectMode(button.dataset.mode);
 });
 
-$aircraftMenu.addEventListener('change', () => {
-  selectedAircraft = $aircraftMenu.value;
+document.getElementById('aircraft-grid').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-aircraft]');
+  if (!button) return;
+  selectedAircraft = button.dataset.aircraft;
+  setActive('aircraft-grid', 'aircraft', selectedAircraft);
   updateSummary();
 });
 
 document.getElementById('btn-room-code').addEventListener('click', () => {
   selectMode('multiplayer');
   $roomCode.value = makeRoomCode();
-  lastRoomCheck = { room: $roomCode.value, activePilots: 0, ok: true };
-  $roomStatus.textContent = `Room ${$roomCode.value} created. Share the code with player two.`;
-  pushTerminal(`> created room ${$roomCode.value}`);
+  lastRoomCheck = { room: $roomCode.value, ok: true };
+  $roomStatus.textContent = `Room ${$roomCode.value} ready. Send the invite to player two.`;
 });
 
+/* Optional pre-launch check: subscribe to the room's presence channel just long
+ * enough to see whether anyone is already sitting in it. */
 document.getElementById('btn-join-room').addEventListener('click', async () => {
   selectMode('multiplayer');
   const room = normalizeRoom($roomCode.value);
   if (!room) {
-    $roomStatus.textContent = 'Enter a room code or press Create.';
-    pushTerminal('> join blocked: missing code');
+    $roomStatus.textContent = 'Enter a code, or press New code.';
     return;
   }
   $roomCode.value = room;
-  $roomStatus.textContent = `Checking room ${room}...`;
-  pushTerminal(`> checking room ${room}`);
+  $roomStatus.textContent = `Checking ${room}…`;
   try {
     if (!supabaseModulePromise) supabaseModulePromise = import(SUPABASE_CLIENT_URL);
     const { createClient } = await supabaseModulePromise;
-    const client = createClient(ONLINE_CONFIG.url, ONLINE_CONFIG.key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const client = createClient(ONLINE_CONFIG.url, ONLINE_CONFIG.key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     const channel = client.channel(`drone-simulator:${room}`);
-    let activePilots = 0;
+    let pilots = 0;
     channel.on('presence', { event: 'sync' }, () => {
-      activePilots = Object.values(channel.presenceState()).reduce((n, rows) => n + rows.length, 0);
+      pilots = Object.values(channel.presenceState()).reduce((n, rows) => n + rows.length, 0);
     });
     await new Promise((resolve, reject) => {
       const timer = setTimeout(resolve, 1800);
@@ -144,15 +143,13 @@ document.getElementById('btn-join-room').addEventListener('click', async () => {
       });
     });
     await channel.unsubscribe();
-    lastRoomCheck = { room, activePilots, ok: true };
-    $roomStatus.textContent = activePilots > 0
-      ? `Room active - ${activePilots} pilot(s) online. Launch to join.`
-      : `Room open. Launch and wait for player two.`;
-    pushTerminal(activePilots > 0 ? `> room active: ${activePilots} pilot(s)` : '> room open: waiting for player');
+    lastRoomCheck = { room, ok: true };
+    $roomStatus.textContent = pilots > 0
+      ? `${pilots} pilot(s) already in ${room}. Launch to join them.`
+      : `${room} is open. Launch and wait for player two.`;
   } catch (_) {
-    lastRoomCheck = { room, activePilots: 0, ok: false };
-    $roomStatus.textContent = 'Room check failed. Verify code and connection.';
-    pushTerminal('> room check failed');
+    lastRoomCheck = { room, ok: false };
+    $roomStatus.textContent = 'Could not reach the room. Check the code and your connection.';
   }
 });
 
@@ -162,41 +159,34 @@ document.getElementById('btn-copy-room').addEventListener('click', async () => {
   const url = gameUrl().toString();
   try {
     await navigator.clipboard.writeText(url);
-    $roomStatus.textContent = `Invite copied. Player two opens the link and launches.`;
-    pushTerminal('> invite link copied');
+    $roomStatus.textContent = 'Invite copied. Player two opens the link and launches.';
   } catch (_) {
     $roomStatus.textContent = url;
-    pushTerminal('> clipboard blocked: link printed');
   }
 });
 
 document.getElementById('btn-launch').addEventListener('click', () => {
-  if (selectedMode === 'multiplayer' && !$roomCode.value) $roomCode.value = makeRoomCode();
-  if (selectedMode === 'multiplayer') {
-    const room = normalizeRoom($roomCode.value);
-    if (lastRoomCheck.room !== room || !lastRoomCheck.ok) {
-      $roomStatus.textContent = `Launching room ${room}. Remote pilots appear as radar contacts.`;
-    }
-  }
-  pushTerminal('> launching gameplay');
   location.href = gameUrl().toString();
 });
 
-let terminalIdx = 0;
-setInterval(() => {
-  pushTerminal(TERMINAL_LINES[terminalIdx % TERMINAL_LINES.length]);
-  terminalIdx += 1;
-}, 2800);
-
-const bootParams = new URLSearchParams(location.search);
-if (bootParams.get('mode') && MODES[bootParams.get('mode')]) {
-  selectedMode = bootParams.get('mode');
-  setActive('[data-mode]', 'mode', selectedMode);
+/* Deep links (shared invites) preselect the setup. */
+const boot = new URLSearchParams(location.search);
+const bootMode = boot.get('mode');
+if (bootMode) {
+  /* Accept either the page's own keys or the game's mode names, so an invite
+   * built by game.html round-trips correctly. */
+  const match = MODES[bootMode]
+    ? bootMode
+    : Object.keys(MODES).find((key) => MODES[key].launchAs === bootMode);
+  if (match) selectMode(match);
 }
-if (bootParams.get('aircraft') && AIRCRAFT[bootParams.get('aircraft')]) {
-  selectedAircraft = bootParams.get('aircraft');
-  $aircraftMenu.value = selectedAircraft;
+if (AIRCRAFT[boot.get('aircraft')]) {
+  selectedAircraft = boot.get('aircraft');
+  setActive('aircraft-grid', 'aircraft', selectedAircraft);
 }
-if (bootParams.get('room')) $roomCode.value = normalizeRoom(bootParams.get('room'));
+if (boot.get('room')) {
+  $roomCode.value = normalizeRoom(boot.get('room'));
+  selectMode('multiplayer');
+}
 
 updateSummary();

@@ -61,12 +61,13 @@ npm run dev          # → http://localhost:5173
 | `npm run dev` | Vite dev server, bound to `0.0.0.0` so you can fly it from your phone |
 | `npm run preview` | Production-style static preview |
 | `npm run check` | Parses `src/main.js` and reports syntax errors |
+| `npm run vendor` | Regenerates `vendor/` — see [Deploying](#deploying) |
 
 **Needs:** Node 18+ and a WebGL2 browser. That's it.
 
-`index.html` is the landing page — mode and aircraft select, no WebGL. `game.html`
-is the simulator. They're separate documents so the first paint never pays for
-the renderer.
+`index.html` is the preflight page — mode and airframe select, no WebGL.
+`game.html` is the simulator. They're separate documents so the first paint never
+pays for the renderer.
 
 ## Controls
 
@@ -176,6 +177,35 @@ Setup lives in `docs/FREE_MULTIPLAYER_SETUP.md`. Optional cloud-synced battle
 profiles need the SQL in `docs/SUPABASE_BATTLE_PROFILE_SETUP.md` — without those
 tables, records stay local and the UI reports sync as pending.
 
+## Deploying
+
+**There is no build step.** GitHub Pages serves this repo as-is, straight off
+`main`.
+
+That only works because the bare specifiers the sources import (`three`,
+`three/addons/…`) — which normally need a bundler — are resolved by an import map
+in `game.html`:
+
+```json
+{ "imports": { "three": "./vendor/three.module.min.js",
+               "three/addons/": "./vendor/three/addons/" } }
+```
+
+`vendor/` is generated, not hand-maintained. It holds the minified three build
+plus only the 13 addon files actually reachable from the simulator's imports —
+816 KB, against 23 MB for all of `examples/jsm`. Regenerate it after bumping
+three or adding a new addon import:
+
+```bash
+npm run vendor
+```
+
+`scripts/vendor-three.mjs` walks the import graph and copies what it reaches, so
+a missing addon is a loud error at vendor time instead of a blank screen in
+production. And if the graph fails to load anyway, `game.html` runs a 20-second
+watchdog that swaps the loading overlay for a real error message and a reload
+button, rather than spinning forever.
+
 ## Project layout
 
 ```
@@ -195,6 +225,8 @@ game.html               Simulator shell — menus, HUD, help overlay
     └─ campaign.js      Campaign data + MissionDirector (465 lines)
 
 check-module.mjs        Syntax check behind `npm run check`
+scripts/                vendor-three.mjs — builds vendor/ for the static host
+vendor/                 Generated. three + the addons the game reaches
 docs/                   Flight model plan · multiplayer setup · Supabase SQL
 ```
 
@@ -204,7 +236,6 @@ Ordered by how much they'd bother you.
 
 | | Gap |
 |---|---|
-| 🔴 | **The GitHub Pages build is broken.** The pages do `import * as THREE from 'three'` — a bare specifier only Vite can resolve. Nothing in the repo builds or publishes, so Pages serves raw sources and the module graph fails to load. Fix: ship `vite build` output, or add an import map to `game.html`. |
 | 🟠 | `src/main.js` is one 5,000-line module. Splitting it into state / input / world / entities / sim / UI is the next structural job. |
 | 🟠 | Multiplayer hit detection is client-authoritative. |
 | 🟡 | Flight is target-velocity, not rigid-body — no torque, no per-motor thrust. |

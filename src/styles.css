@@ -52,6 +52,28 @@ body.direct-launch::after {
         radial-gradient(circle at 50% 35%, rgba(99,255,156,.13), transparent 34%),
         linear-gradient(135deg, #020504, #07100c 54%, #020403);
 }
+#boot-error {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+    background: linear-gradient(135deg, #020504, #07100c 54%, #020403);
+}
+#boot-error[hidden] { display: none; }
+#boot-error h2 {
+    color: var(--danger);
+    font-size: clamp(18px, 3vw, 26px);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+#boot-error p { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+#boot-error .boot-hint { color: var(--dim); }
+#boot-error .boot-actions { display: flex; gap: 10px; justify-content: center; margin-top: 22px; }
+#boot-error .boot-actions .btn { text-decoration: none; }
+
 body::before {
     content: '';
     position: fixed;

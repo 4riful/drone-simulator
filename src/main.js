@@ -85,7 +85,7 @@ const GAME_META = {
 const GAME_MODES = {
     single: { label:'Single', brief:'Single pilot combat sortie. Existing systems stay enabled.', enemies:true, scoreMul:1, fuelStart:100, objective:true },
     training: { label:'Training', brief:'Flight school mode: no hostile drones, slower scoring, safer fuel reserve.', enemies:false, scoreMul:0.35, fuelStart:100, objective:false },
-    mission: { label:'Mission', brief:'Full mission profile: hostile drones, objectives, and higher score weight.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
+    mission: { label:'Campaign', brief:'Operation Andromeda — seven story sorties. Opens the sortie select screen.', enemies:true, scoreMul:1.25, fuelStart:100, objective:true },
     freeflight: { label:'Free Flight', brief:'Open practice mode: explore, land, and tune controls without combat.', enemies:false, scoreMul:0, fuelStart:100, objective:false },
     multiplayer: { label:'Online Battle', brief:'Create a two-player battle room, share the invite, and fight with remote radar contacts.', enemies:false, scoreMul:1, fuelStart:100, objective:false, experimental:true }
 };
@@ -4299,7 +4299,19 @@ setupMobileControls();
         await saveControlSettings();
     }
     if(boot.room) await saveOnlineRoom(boot.room);
-    if(boot.mode || boot.aircraft) setTimeout(startGame, 250);
+    if(boot.mode || boot.aircraft){
+        /* Mirror the btn-start rule: "mission" IS the story campaign, so a direct
+         * launch has to land on the campaign screen and pick a sortie. Calling
+         * startGame() here instead dropped the pilot into a generic sortie with
+         * activeMission null, which is why the campaign was unreachable from the
+         * preflight page. Clear the overlay by hand — only startGame() does it. */
+        if(S.gameMode === 'mission'){
+            document.body.classList.remove('direct-launch');
+            openCampaign();
+        } else {
+            setTimeout(startGame, 250);
+        }
+    }
 })();
 
 /* Objective system */
@@ -5018,6 +5030,8 @@ function animate(){
 }
 
 animate(); showScreen('menu');
+/* Tells the boot watchdog in game.html that the module resolved and ran. */
+window.__simBooted = true;
 window.addEventListener('resize',()=>{
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
     renderer.setSize(innerWidth,innerHeight);
