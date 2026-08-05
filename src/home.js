@@ -36,6 +36,15 @@ const AIRCRAFT = {
   helicopter: 'MQ-8B Fire Scout',
 };
 
+/* Flight envelope readout. The percentages are the VEHICLE_PROFILES multipliers
+ * from src/main.js and the figures are those multipliers applied to the C block
+ * (48 m/s, 20 m/s, 0.78 rad). "Hover" is the inverse of hCoastMul: the quad
+ * coasts on stick release, the rotorcraft parks. Keep both in sync with main.js. */
+const ENVELOPE = {
+  drone:      [['Speed', 100, '48 m/s'], ['Climb', 100, '20 m/s'], ['Bank', 100, '45°'], ['Hover', 50, 'drifts']],
+  helicopter: [['Speed', 82, '39 m/s'], ['Climb', 90, '18 m/s'], ['Bank', 65, '29°'], ['Hover', 100, 'holds']],
+};
+
 const SUPABASE_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const ONLINE_CONFIG = {
   url: 'https://edmvtxoteltikuwjxdsf.supabase.co',
@@ -76,10 +85,43 @@ function setActive(group, attr, value) {
   });
 }
 
+function updateEnvelope() {
+  const rows = document.querySelectorAll('#envelope .bar');
+  ENVELOPE[selectedAircraft].forEach(([label, pct, figure], i) => {
+    const row = rows[i];
+    if (!row) return;
+    row.querySelector('span').textContent = label;
+    row.querySelector('u').style.width = `${pct}%`;
+    row.querySelector('b').textContent = figure;
+  });
+}
+
 function updateSummary() {
   $brief.textContent = MODES[selectedMode].brief;
   $launchNote.textContent = `${MODES[selectedMode].label} · ${AIRCRAFT[selectedAircraft]}`;
   $roomPanel.classList.toggle('show', selectedMode === 'multiplayer');
+  updateEnvelope();
+}
+
+/* Count the headline figures up once on load. Cheap, and it makes the page feel
+ * like it booted rather than just appeared. */
+function runCounters() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('[data-count]').forEach((el) => { el.textContent = el.dataset.count; });
+    return;
+  }
+  for (const el of document.querySelectorAll('[data-count]')) {
+    const target = Number(el.dataset.count);
+    const decimals = Number(el.dataset.dec || 0);
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / 900);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = (target * eased).toFixed(decimals);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
 }
 
 function selectMode(mode) {
@@ -190,3 +232,4 @@ if (boot.get('room')) {
 }
 
 updateSummary();
+runCounters();

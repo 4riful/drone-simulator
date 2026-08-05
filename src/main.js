@@ -360,7 +360,7 @@ let actx;
 try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(_){actx={state:'closed',currentTime:0,sampleRate:44100,destination:{},createOscillator:()=>({connect:()=>({connect:()=>({connect:()=>({})})}),start:()=>{},stop:()=>{},frequency:{value:0,setValueAtTime:()=>{},setTargetAtTime:()=>{},exponentialRampToValueAtTime:()=>{}},type:'sine',onended:null}),createGain:()=>({connect:()=>({connect:()=>({connect:()=>({})})}),gain:{value:0,setValueAtTime:()=>{},setTargetAtTime:()=>{},linearRampToValueAtTime:()=>{},exponentialRampToValueAtTime:()=>{}}}),createBuffer:(_c,l,r)=>{const b={getChannelData:()=>new Float32Array(l),length:l,sampleRate:r};return b;},createBufferSource:()=>({connect:()=>({connect:()=>({connect:()=>({})})}),start:()=>{},stop:()=>{},buffer:null,loop:false,onended:null}),createBiquadFilter:()=>({connect:()=>({connect:()=>({connect:()=>({})})}),type:'lowpass',frequency:{value:0,setValueAtTime:()=>{},setTargetAtTime:()=>{},exponentialRampToValueAtTime:()=>{}},Q:{value:0},gain:{value:0}}),resume:()=>Promise.resolve()};}
 function resumeAudio() {
     try{if(actx.state==='suspended')actx.resume();}catch(_){}
-    const m=document.getElementById('menu-screen'),p=document.getElementById('pause-screen'),s=document.getElementById('settings-screen');
+    const m=document.getElementById('campaign-screen'),p=document.getElementById('pause-screen'),s=document.getElementById('settings-screen');
     if((m && !m.classList.contains('hidden')) || (p && !p.classList.contains('hidden')) || (s && !s.classList.contains('hidden'))){
         startUiAmbience();
     }
@@ -807,12 +807,7 @@ function seededRandom(seedText){
         return seed / 4294967296;
     };
 }
-function withSeededRandom(seedText, fn){
-    const originalRandom = Math.random;
-    Math.random = seededRandom(seedText);
-    try { return fn(); }
-    finally { Math.random = originalRandom; }
-}
+/* Superseded by makeSeededScope, which holds one RNG across the staged boot. */
 function getRoomFromUrl(){
     return normalizeRoomId(new URLSearchParams(location.search).get('room'));
 }
@@ -824,6 +819,47 @@ function getBootParams(){
         room: normalizeRoomId(params.get('room'))
     };
 }
+/* ===== BOOT PROGRESS =====================================================
+ * Building the world blocks the main thread. Split it into stages, paint the
+ * progress bar between them, and hold anything that needs a finished world
+ * (a direct launch from the preflight page) until worldReady resolves.
+ * ======================================================================== */
+let markWorldReady;
+const worldReady = new Promise(resolve => { markWorldReady = resolve; });
+
+const $boot = document.getElementById('boot');
+const $bootFill = document.getElementById('boot-fill');
+const $bootStage = document.getElementById('boot-stage');
+
+function setBootStage(label, fraction){
+    if($bootStage) $bootStage.textContent = `${label} · ${Math.round(fraction*100)}%`;
+    if($bootFill) $bootFill.style.width = `${Math.round(fraction*100)}%`;
+}
+/* Two frames: one to apply the style change, one to be sure it painted before
+ * the next stage seizes the thread. */
+const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+function finishBoot(){
+    window.__simBooted = true;
+    if($boot) $boot.classList.add('done');
+    markWorldReady();
+}
+
+/* Keeps one seeded RNG alive across the whole staged build while only being
+ * installed during a stage — otherwise the render loop, which runs between
+ * stages, would consume from the sequence and desync the world between the two
+ * players in a battle room. */
+function makeSeededScope(seedText){
+    if(!seedText) return fn => fn();
+    const rng = seededRandom(seedText);
+    return fn => {
+        const originalRandom = Math.random;
+        Math.random = rng;
+        try { return fn(); }
+        finally { Math.random = originalRandom; }
+    };
+}
+
 function roomInviteUrl(){
     const room = normalizeRoomId(onlineConfig.room);
     const url = new URL('./game.html', location.href);
@@ -1336,7 +1372,9 @@ function initWinTex(count) {
         winTextures.push({tex, emi});
     }
 }
-initWinTex(10);
+/* initWinTex is called from the staged boot sequence, not here — ten pairs of
+ * 256x512 canvases is one of the two things that used to freeze first launch.
+ * Nothing reads winTextures at module-evaluation time. */
 
 const roofMat = new THREE.MeshStandardMaterial({color:0x606868, roughness:.85, metalness:.12});
 
@@ -3634,7 +3672,7 @@ function gameOver(){
 }
 
 /* ===== UI ===== */
-const $menu=document.getElementById('menu-screen'),$pause=document.getElementById('pause-screen'),$go=document.getElementById('gameover-screen'),$hud=document.getElementById('hud'),$settings=document.getElementById('settings-screen'),$help=document.getElementById('help-screen');
+const $pause=document.getElementById('pause-screen'),$go=document.getElementById('gameover-screen'),$hud=document.getElementById('hud'),$settings=document.getElementById('settings-screen'),$help=document.getElementById('help-screen');
 const $hPilot=document.getElementById('h-pilot'),$hScore=document.getElementById('h-score'),$hDist=document.getElementById('h-dist'),$hKills=document.getElementById('h-kills'),$hRings=document.getElementById('h-rings');
 const $hFuel=document.getElementById('h-fuel'),$hWind=document.getElementById('h-wind'),$hTime=document.getElementById('h-time');
 const $hBatt=document.getElementById('h-batt'),$hSignal=document.getElementById('h-signal'),$hAir=document.getElementById('h-air'),$flightWarn=document.getElementById('flight-warn');
@@ -3761,8 +3799,11 @@ function drawADI(pitch,roll){
 }
 const $dbStats=document.getElementById('db-stats');
 const $profileMenu=document.getElementById('profile-menu'),$profileName=document.getElementById('profile-name'),$profileStats=document.getElementById('profile-stats'),$battleInsight=document.getElementById('battle-insight');
-const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$modeBrief=document.getElementById('mode-brief'),$onlineSetup=document.getElementById('online-setup');
-const $modeCards=[...document.querySelectorAll('[data-mode]')];
+const $personaMenu=document.getElementById('persona-menu'),$personaBrief=document.getElementById('persona-brief'),$onlineSetup=document.getElementById('online-setup');
+/* Mode selection lives on the preflight page; nothing in this document sets it
+ * any more, so these are absent by design and every use is guarded. */
+const $modeBrief=null;
+const $modeCards=[];
 
 function getModeCfg(){ return GAME_MODES[S.gameMode] || GAME_MODES.single; }
 function getPersonaCfg(){ return PERSONAS[selectedPersona] || PERSONAS.recon; }
@@ -3798,7 +3839,7 @@ function setPersona(persona, persist=true){
 
 const $setDeadzone=document.getElementById('set-deadzone'),$setExpo=document.getElementById('set-expo');
 const $setPitchS=document.getElementById('set-pitch-s'),$setRollS=document.getElementById('set-roll-s'),$setYawS=document.getElementById('set-yaw-s'),$setThrS=document.getElementById('set-thr-s');
-const $vehicleMenu=document.getElementById('vehicle-menu'),$vehicleSet=document.getElementById('set-vehicle');
+const $vehicleSet=document.getElementById('set-vehicle');
 const $setDeadzoneV=document.getElementById('set-deadzone-v'),$setExpoV=document.getElementById('set-expo-v');
 const $setPitchSV=document.getElementById('set-pitch-s-v'),$setRollSV=document.getElementById('set-roll-s-v'),$setYawSV=document.getElementById('set-yaw-s-v'),$setThrSV=document.getElementById('set-thr-s-v');
 const $invLX=document.getElementById('inv-lx'),$invLY=document.getElementById('inv-ly'),$invRX=document.getElementById('inv-rx'),$invRY=document.getElementById('inv-ry');
@@ -3811,16 +3852,18 @@ const $gpBtnChips=[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>document.getElementById(`gp
 
 const $campaign=document.getElementById('campaign-screen');
 const $debrief=document.getElementById('debrief-screen');
+/* Last non-overlay screen, so Back out of Settings/Help knows where to land. */
+let lastScreen = 'campaign';
 function showScreen(name){
-    $menu.classList.add('hidden');$pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');$help.classList.add('hidden');
+    if(name!=='settings' && name!=='help') lastScreen = name;
+    $pause.classList.add('hidden');$go.classList.add('hidden');$hud.classList.add('hidden');$settings.classList.add('hidden');$help.classList.add('hidden');
     $campaign.classList.add('hidden');$debrief.classList.add('hidden');
     if(name==='campaign'){$campaign.classList.remove('hidden'); startUiAmbience(); document.body.classList.add('is-landing','is-menu'); document.body.classList.remove('is-gameplay'); updateMobileMode(); return;}
     if(name==='debrief'){$debrief.classList.remove('hidden'); startUiAmbience(); document.body.classList.add('is-landing','is-menu'); document.body.classList.remove('is-gameplay'); updateMobileMode(); return;}
     document.body.classList.toggle('is-gameplay', name==='playing' || name==='pause' || name==='gameover');
-    document.body.classList.toggle('is-landing', name==='menu' || name==='settings' || name==='help');
-    document.body.classList.toggle('is-menu', name==='menu' || name==='settings' || name==='help');
-    if(name==='menu'){$menu.classList.remove('hidden'); startUiAmbience();}
-    else if(name==='pause'){
+    document.body.classList.toggle('is-landing', name==='settings' || name==='help');
+    document.body.classList.toggle('is-menu', name==='settings' || name==='help');
+    if(name==='pause'){
         $pause.classList.remove('hidden'); startUiAmbience();
         document.getElementById('ps-score').textContent=S.score;
         document.getElementById('ps-kills').textContent=S.kills;
@@ -3843,10 +3886,10 @@ function closeHelp(){
     if(helpReturnMode==='playing' || helpReturnMode==='paused'){
         S.mode='paused';
         showScreen('pause');
-    }else{
-        S.mode='menu';
-        showScreen('menu');
+        return;
     }
+    S.mode='menu';
+    leaveOverlay();
 }
 function getVehicleProfile(){
     return VEHICLE_PROFILES[controlCfg.vehicleMode] || VEHICLE_PROFILES.drone;
@@ -4020,7 +4063,16 @@ function paintHandler(h, portraitEl, nameEl, roleEl, bioEl){
     if(bioEl) bioEl.textContent = h.bio;
 }
 
+function renderCampaignProgress(){
+    const done = CAMPAIGN.filter(m=>campaignProgress.completed.includes(m.id)).length;
+    const fill = document.getElementById('cmp-progress-fill');
+    const label = document.getElementById('cmp-progress-label');
+    if(fill) fill.style.width = `${(done/CAMPAIGN.length)*100}%`;
+    if(label) label.textContent = `${done} / ${CAMPAIGN.length} complete`;
+}
+
 function renderCampaignList(){
+    renderCampaignProgress();
     $cmpList.innerHTML='';
     let lastAct=null;
     for(const m of CAMPAIGN){
@@ -4156,7 +4208,7 @@ function openDebrief(){
 }
 
 document.getElementById('btn-cmp-launch').addEventListener('click',launchCampaignMission);
-document.getElementById('btn-cmp-back').addEventListener('click',()=>showScreen('menu'));
+document.getElementById('btn-cmp-back').addEventListener('click',exitToMenu);
 document.getElementById('btn-dbf-retry').addEventListener('click',()=>{ if(activeMission){ selectedMissionId=activeMission.id; launchCampaignMission(); } });
 document.getElementById('btn-dbf-menu').addEventListener('click',()=>{ activeMission=null; openCampaign(); });
 document.getElementById('btn-dbf-next').addEventListener('click',()=>{
@@ -4221,24 +4273,23 @@ function exitToMenu(){
     disconnectOnlineRoom().catch(()=>{});
     location.href = './index.html';
 }
-document.getElementById('btn-settings').addEventListener('click',()=>{applySettingsToUI();showScreen('settings');});
-document.getElementById('btn-back-menu').addEventListener('click',()=>showScreen('menu'));
-document.getElementById('btn-help').addEventListener('click',openHelp);
+/* Settings and Help are overlays. With the duplicate setup screen gone there is
+ * nothing in this document to fall back to, so leaving one returns to the sortie
+ * if there is one, to the campaign if that is where you came from, and to the
+ * preflight page otherwise. */
+function leaveOverlay(){
+    if(S.mode==='playing' || S.mode==='paused'){ S.mode='paused'; showScreen('pause'); return; }
+    if(lastScreen==='campaign' || lastScreen==='debrief'){ showScreen(lastScreen); return; }
+    exitToMenu();
+}
+document.getElementById('btn-back-menu').addEventListener('click',leaveOverlay);
 document.getElementById('btn-help-back').addEventListener('click',closeHelp);
 function setVehicleMode(mode){
     controlCfg.vehicleMode = mode === 'helicopter' ? 'helicopter' : 'drone';
-    $vehicleMenu.value = controlCfg.vehicleMode;
     $vehicleSet.value = controlCfg.vehicleMode;
     applyVehicleMode();
 }
-$vehicleMenu.addEventListener('change', async ()=>{setVehicleMode($vehicleMenu.value); await saveControlSettings();});
 $vehicleSet.addEventListener('change', pullSettingsFromUI);
-$modeCards.forEach(card=>card.addEventListener('click', async ()=>{
-    setGameMode(card.dataset.mode);
-    const p = await dbGetProfileById(activeProfileId);
-    if(p){p.preferredMode=S.gameMode; await dbSaveProfile(p); activeProfile=p; await refreshProfilesUI();}
-    if(S.gameMode==='multiplayer') setOnlineStatus(getOnlineStateLabel(), 'good');
-}));
 $personaMenu.addEventListener('change', async ()=>{
     setPersona($personaMenu.value);
     const p = await dbGetProfileById(activeProfileId);
@@ -4254,13 +4305,6 @@ document.getElementById('btn-room-join').addEventListener('click',()=>{joinOnlin
 document.getElementById('btn-room-copy').addEventListener('click',()=>{copyOnlineInvite().catch(()=>setOnlineStatus('Could not copy invite.', 'bad'));});
 document.getElementById('btn-save-settings').addEventListener('click', async ()=>{pullSettingsFromUI();await saveControlSettings();notify('SETTINGS SAVED','ring-note');});
 [$setDeadzone,$setExpo,$setPitchS,$setRollS,$setYawS,$setThrS,$invLX,$invLY,$invRX,$invRY].forEach(el=>el.addEventListener('input',pullSettingsFromUI));
-document.getElementById('btn-campaign').addEventListener('click',openCampaign);
-document.getElementById('btn-start').addEventListener('click',()=>{
-    /* "Mission" is the story campaign; every other mode is a free sortie. */
-    if(S.gameMode==='mission'){ openCampaign(); return; }
-    activeMission=null;
-    startGame();
-});
 document.getElementById('btn-resume').addEventListener('click',togglePause);
 document.getElementById('btn-restart-p').addEventListener('click',startGame);
 document.getElementById('btn-restart-go').addEventListener('click',startGame);
@@ -4269,10 +4313,6 @@ document.getElementById('btn-exit-menu').addEventListener('click',exitToMenu);
 document.getElementById('btn-create-profile').addEventListener('click',createProfileFromInput);
 $profileName.addEventListener('keydown',e=>{ if(e.key==='Enter') createProfileFromInput(); });
 $profileMenu.addEventListener('change', async ()=>{await switchActiveProfile($profileMenu.value);});
-document.getElementById('btn-exit-app').addEventListener('click',()=>{
-    notify('Use browser/tab close to quit','kill-note');
-    try{ window.close(); }catch(_){}
-});
 document.querySelectorAll('.btn, .m-start').forEach(b=>{
     b.addEventListener('pointerenter', sndUiHover);
     b.addEventListener('click', sndUiClick);
@@ -4300,6 +4340,9 @@ setupMobileControls();
     }
     if(boot.room) await saveOnlineRoom(boot.room);
     if(boot.mode || boot.aircraft){
+        /* Settings load far faster than the city builds. Launching before the
+         * world exists dropped the pilot into an empty scene. */
+        await worldReady;
         /* Mirror the btn-start rule: "mission" IS the story campaign, so a direct
          * launch has to land on the campaign screen and pick a sortie. Calling
          * startGame() here instead dropped the pilot into a generic sortie with
@@ -4542,7 +4585,15 @@ function updSmoke(dt){
 }
 
 /* ===== INIT ===== */
-try{
+/* This page is the simulator; setup lives on the preflight page. Opened with no
+ * mode or airframe, bounce there rather than spend seconds building a world
+ * nobody asked for. replace() so Back does not land right back here. */
+const bootParamsAtStart = getBootParams();
+if(!bootParamsAtStart.mode && !bootParamsAtStart.aircraft){
+    setBootStage('Opening preflight', 1);
+    location.replace('./index.html');
+}
+else try{
     const bootRoomSeed = normalizeRoomId(new URLSearchParams(location.search).get('room'));
     /* Casting is enumerated explicitly (it costs a shadow-map draw per object),
      * but *receiving* is just a shader branch on an already-shared material, so
@@ -4557,9 +4608,38 @@ try{
             if(lit) o.receiveShadow = true;
         });
     };
-    const initWorld = () => { generateCity(); buildSpatialGrid(); spawnTraffic(); spawnEnemies(); spawnRings(); spawnOrbs(); spawnPowerUps(); spawnSmokeColumns(); enableShadowReceiving(); };
-    bootRoomSeed ? withSeededRandom(`room:${bootRoomSeed}`, initWorld) : initWorld();
-}catch(e){console.error('Init error:',e);}
+    const BOOT_STAGES = [
+        ['Generating facades',   () => initWinTex(10)],
+        ['Building city',        () => generateCity()],
+        ['Indexing collision',   () => buildSpatialGrid()],
+        ['Releasing traffic',    () => spawnTraffic()],
+        ['Deploying hostiles',   () => spawnEnemies()],
+        ['Placing objectives',   () => { spawnRings(); spawnOrbs(); spawnPowerUps(); }],
+        ['Raising smoke',        () => spawnSmokeColumns()],
+        ['Casting shadows',      () => enableShadowReceiving()],
+        /* Compiling here moves the first-frame shader stall — which is the other
+         * half of the "it hung" report — inside the progress bar. */
+        ['Compiling shaders',    () => renderer.compile(scene, camera)],
+    ];
+
+    (async () => {
+        const seeded = makeSeededScope(bootRoomSeed ? `room:${bootRoomSeed}` : '');
+        for(let i = 0; i < BOOT_STAGES.length; i++){
+            const [label, run] = BOOT_STAGES[i];
+            setBootStage(label, i / BOOT_STAGES.length);
+            await nextPaint();
+            /* One bad stage should cost its own feature, not the whole boot. */
+            try { seeded(run); }
+            catch(e){ console.error(`Init stage failed: ${label}`, e); }
+        }
+        setBootStage('Ready', 1);
+        await nextPaint();
+        finishBoot();
+    })();
+}catch(e){
+    console.error('Init error:',e);
+    finishBoot();
+}
 
 /* ===== GAME LOOP ===== */
 const clock=new THREE.Clock();
@@ -5029,9 +5109,11 @@ function animate(){
     }catch(e){console.warn('Frame error:',e);}
 }
 
-animate(); showScreen('menu');
-/* Tells the boot watchdog in game.html that the module resolved and ran. */
-window.__simBooted = true;
+animate();
+/* Tells the boot watchdog in game.html that the module graph resolved and this
+ * file executed. Distinct from __simBooted, which finishBoot() sets once the
+ * world exists — a slow build must not be mistaken for a failed import. */
+window.__simModuleRan = true;
 window.addEventListener('resize',()=>{
     camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
     renderer.setSize(innerWidth,innerHeight);

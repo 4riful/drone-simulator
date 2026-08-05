@@ -37,129 +37,18 @@
     }
 </script>
 
-<div id="menu-screen" class="screen landing-page">
-<div class="m">
-    <div class="m-head">
-        <div class="m-tag">Browser Flight Simulator</div>
-        <h1>Drone Simulator</h1>
-        <h2>Flight Setup</h2>
-        <div class="terminal-hero" aria-label="terminal mission brief">
-            <div class="terminal-bar"><span></span><span></span><span></span><b>setup@simulator:~/preflight</b></div>
-            <div class="terminal-lines">
-                <p><span>1</span> choose a game mode</p>
-                <p><span>2</span> select aircraft and create your own callsign</p>
-                <p><span>3</span> radio, records, and HUD use that callsign</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="m-section mode-section">
-        <div class="m-label"><span class="step-num">01</span> Select Game Mode</div>
-        <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="Game mode">
-            <button class="mode-card active" type="button" data-mode="single" aria-pressed="true"><b>Single</b><span>Balanced solo sortie with hostiles and objectives.</span></button>
-            <button class="mode-card" type="button" data-mode="training" aria-pressed="false"><b>Training</b><span>Safer flight school, no combat pressure.</span></button>
-            <button class="mode-card" type="button" data-mode="mission" aria-pressed="false"><b>Campaign</b><span>Operation Andromeda — 7 story sorties. Opens sortie select.</span></button>
-            <button class="mode-card" type="button" data-mode="freeflight" aria-pressed="false"><b>Free Flight</b><span>Explore, practice landings, no enemies.</span></button>
-            <button class="mode-card experimental" type="button" data-mode="multiplayer" aria-pressed="false"><b>Online Battle</b><span>Two-player battle room with radar contacts.</span></button>
-        </div>
-        <div id="mode-brief" class="mode-brief">Single pilot combat sortie. Existing systems stay enabled.</div>
-        <div id="online-setup" class="online-setup">
-            <div class="m-label">Online Battle Room</div>
-            <div class="m-row"><label>Battle Code</label><input id="online-room" class="m-input" type="text" maxlength="24" placeholder="DRN-482K"></div>
-            <div class="online-actions">
-                <button class="btn btn-sm" id="btn-room-create" type="button">Create Battle</button>
-                <button class="btn btn-sm" id="btn-room-join" type="button">Join Battle</button>
-                <button class="btn btn-sm" id="btn-room-copy" type="button">Copy Invite</button>
-            </div>
-            <div class="online-actions"><span id="online-status">Ready. Create a battle or join by code.</span></div>
-        </div>
-    </div>
-
-    <div class="m-section aircraft-section">
-        <div class="m-label"><span class="step-num">02</span> Aircraft &amp; Pilot</div>
-        <div class="m-body">
-            <div class="m-row">
-                <label>Aircraft</label>
-                <select id="vehicle-menu" class="m-sel"><option value="drone">MQ-9 Reaper</option><option value="helicopter">MQ-8B Fire Scout</option></select>
-            </div>
-            <div class="m-row">
-                <label>Operator</label>
-                <select id="profile-menu" class="m-sel"></select>
-            </div>
-            <div class="m-row">
-                <input id="profile-name" class="m-input" type="text" maxlength="24" placeholder="Own callsign e.g. RIFAT-7">
-                <button class="btn btn-sm" id="btn-create-profile">Create</button>
-            </div>
-            <div class="m-row">
-                <label>Persona</label>
-                <select id="persona-menu" class="m-sel">
-                    <option value="recon">Recon Specialist</option>
-                    <option value="combat">Combat Pilot</option>
-                    <option value="test">Test Pilot</option>
-                    <option value="instructor">Instructor</option>
-                </select>
-            </div>
-            <div id="persona-brief" class="persona-brief">Stable sensor-first pilot. Better signal discipline, lighter combat bonus.</div>
-            <div id="profile-stats">No operator assigned.</div>
-            <div id="battle-insight">Create a callsign to build a battle profile.</div>
-        </div>
-    </div>
-
-    <div class="launch-panel">
-        <div>
-            <div class="m-label"><span class="step-num">03</span> Ready</div>
-            <p>Review the mode and aircraft, then enter the simulator.</p>
-        </div>
-        <button class="m-start" id="btn-start">Launch Mission</button>
-    </div>
-
-    <details class="m-section">
-        <summary>Controls</summary>
-        <div class="m-body">
-            <div class="m-keys">
-                <div><span>W S</span> Pitch</div>
-                <div><span>A D</span> Roll</div>
-                <div><span>Q E</span> Yaw</div>
-                <div><span>Space / Shift</span> Up / Down</div>
-                <div><span>F / Click</span> Fire</div>
-                <div><span>Tab</span> Boost</div>
-                <div><span>T</span> Lock Target</div>
-                <div><span>L</span> Follow</div>
-                <div><span>H</span> Help</div>
-                <div><span>G</span> Headlight</div>
-                <div><span>Esc</span> Pause</div>
-            </div>
-            <div class="m-keys-note">Gamepad: Mode 2 RC &mdash; L-Stick throttle+yaw, R-Stick pitch+roll, D-Pad targeting. Configure in Settings.</div>
-        </div>
-    </details>
-
-    <details class="m-section">
-        <summary>Mission Records</summary>
-        <div class="m-body">
-            <div id="db-stats">Loading mission records...</div>
-        </div>
-    </details>
-
-    <details class="m-section author-section" open>
-        <summary>Author / Battle Database</summary>
-        <div class="m-body about-grid">
-            <div class="about-card"><b>Author</b><span>4riful builds and tunes this WebGL combat simulator.</span></div>
-            <div class="about-card"><b>Battle Profile</b><span>Local database stores callsign, persona, preferred mode, sorties, best score, range, kills, waypoints, and flight time.</span></div>
-            <div class="about-card"><b>Battle Insight</b><span>Each mission writes a previous record so the profile panel can show recent performance and multiplayer activity.</span></div>
-            <div class="about-card"><b>Cloud Sync Ready</b><span>When Supabase tables are added, profiles and battle runs sync for leaderboards and public operator pages.</span></div>
-            <div class="about-card"><b>City Map</b><span>River, bridges, districts, airstrip, industrial yards, and harbor landmarks are now map-data driven.</span></div>
-        </div>
-    </details>
-
-    <div class="m-btns">
-        <a class="btn" href="./index.html">Home</a>
-        <button class="btn btn-primary" id="btn-campaign">Story Campaign</button>
-        <button class="btn" id="btn-settings">Settings</button>
-        <button class="btn" id="btn-help">Help</button>
-        <button class="btn btn-danger" id="btn-exit-app">Exit</button>
+<!-- Shown from first paint until the world is built. Static markup on purpose:
+     it has to be on screen before main.js is even fetched. -->
+<div id="boot">
+    <div class="boot-card">
+        <img src="./assets/logo.svg" width="52" height="52" alt="">
+        <div class="boot-title">Drone Simulator</div>
+        <div class="boot-track"><div class="boot-fill" id="boot-fill"></div></div>
+        <div class="boot-stage" id="boot-stage">Loading runtime…</div>
+        <div class="boot-tip">Generating a city takes a moment on first launch.</div>
     </div>
 </div>
-</div>
+
 <div id="help-screen" class="screen hidden">
     <div class="help-card">
         <div class="m-tag">Flight Manual</div>
@@ -184,6 +73,35 @@
         <div class="field-row"><label>Yaw Sensitivity</label><input id="set-yaw-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-yaw-s-v">1.00</span></div>
         <div class="field-row"><label>Throttle Sensitivity</label><input id="set-thr-s" type="range" min="0.4" max="2.5" step="0.05"><span class="tiny" id="set-thr-s-v">1.00</span></div>
         <div class="field-row"><label>Aircraft Type</label><select id="set-vehicle" class="menu-select"><option value="drone">MQ-9 Reaper</option><option value="helicopter">MQ-8B Fire Scout</option></select></div>
+
+        <!-- Pilot and battle-room controls live here now. They used to sit on a
+             second setup screen in this page that duplicated index.html. -->
+        <div class="set-group">
+            <div class="set-group-h">Pilot</div>
+            <div class="field-row"><label>Operator</label><select id="profile-menu" class="menu-select"></select></div>
+            <div class="field-row"><label>New callsign</label><input id="profile-name" class="menu-select" type="text" maxlength="24" placeholder="e.g. RIFAT-7"><button class="btn btn-sm" id="btn-create-profile">Create</button></div>
+            <div class="field-row"><label>Persona</label><select id="persona-menu" class="menu-select">
+                <option value="recon">Recon Specialist</option>
+                <option value="combat">Combat Pilot</option>
+                <option value="test">Test Pilot</option>
+                <option value="instructor">Instructor</option>
+            </select></div>
+            <div id="persona-brief" class="set-note">Stable sensor-first pilot. Better signal discipline, lighter combat bonus.</div>
+            <div id="profile-stats" class="set-note">No operator assigned.</div>
+            <div id="battle-insight" class="set-note">Create a callsign to build a battle profile.</div>
+            <div id="db-stats" class="set-note">Loading mission records...</div>
+        </div>
+
+        <div class="set-group" id="online-setup">
+            <div class="set-group-h">Battle Room</div>
+            <div class="field-row"><label>Battle code</label><input id="online-room" class="menu-select" type="text" maxlength="24" placeholder="DRN-482K"></div>
+            <div class="set-actions">
+                <button class="btn btn-sm" id="btn-room-create" type="button">Create</button>
+                <button class="btn btn-sm" id="btn-room-join" type="button">Join</button>
+                <button class="btn btn-sm" id="btn-room-copy" type="button">Copy invite</button>
+            </div>
+            <div id="online-status" class="set-note">Ready. Create a battle or join by code.</div>
+        </div>
         <div class="check-grid">
             <label><input id="inv-lx" type="checkbox"> Invert Left X (Yaw)</label>
             <label><input id="inv-ly" type="checkbox"> Invert Left Y (Throttle)</label>
@@ -208,7 +126,8 @@
     </div>
     <button class="btn" id="btn-calibrate">Calibrate Gamepad Center</button>
     <button class="btn" id="btn-save-settings">Save Settings</button>
-    <button class="btn btn-danger" id="btn-back-menu">Back</button>
+    <button class="btn btn-primary" id="btn-back-menu">Back</button>
+    <a class="btn btn-danger" href="./index.html">Leave simulator</a>
 </div>
 <div id="pause-screen" class="screen hidden">
     <div class="pause-card">
@@ -255,6 +174,10 @@
             <span class="cmp-tag">CLASSIFIED // TASK FORCE TALON</span>
             <h1>Operation Andromeda</h1>
             <p class="cmp-sub">Andromeda Harbor went dark at 04:12. Seven sorties. One pilot.</p>
+            <div class="cmp-progress">
+                <div class="cmp-progress-track"><div class="cmp-progress-fill" id="cmp-progress-fill"></div></div>
+                <span id="cmp-progress-label">0 / 7 complete</span>
+            </div>
         </div>
         <div class="cmp-body">
             <div class="cmp-list" id="cmp-list"></div>
@@ -393,14 +316,19 @@
 </div>
 <script type="module" src="./src/main.js?v=importmap-boot-20260805-1"></script>
 <script>
-    /* The direct-launch overlay says "Loading simulator..." and is cleared by
-     * main.js. If the module never executes (bad import, WebGL missing, syntax
-     * error) that overlay used to sit there forever. Fail loudly instead. */
+    /* If main.js never executes — unresolved import, syntax error, no WebGL —
+     * the boot screen would sit at 0% forever. Fail loudly instead.
+     *
+     * The test is __simModuleRan (did the module evaluate?), NOT __simBooted
+     * (is the world built?). A slow phone grinding through city generation is
+     * not a failure, and must not be shown an error card. */
     (function () {
         function fail(detail) {
-            if (window.__simBooted) return;
+            if (window.__simModuleRan) return;
             var box = document.getElementById('boot-error');
             if (!box || !box.hidden) return;
+            var boot = document.getElementById('boot');
+            if (boot) boot.classList.add('done');
             document.body.classList.remove('direct-launch');
             if (detail) document.getElementById('boot-error-detail').textContent = detail;
             box.hidden = false;

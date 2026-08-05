@@ -2,107 +2,201 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Drone Simulator — Preflight</title>
     <meta name="description" content="Browser drone simulator: a seven-sortie story campaign, free-flight modes, and two-player battle rooms.">
+    <meta name="theme-color" content="#0a0c0b">
     <link rel="icon" href="./assets/logo.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./src/home.css?v=preflight-20260805-1">
+    <link rel="stylesheet" href="./src/home.css?v=fullpage-20260805-2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+<div class="app">
+
     <header class="top">
         <a class="wordmark" href="./index.html">
-            <img src="./assets/logo.svg" width="26" height="26" alt="">
-            <span>Drone Simulator</span>
+            <img src="./assets/logo.svg" width="24" height="24" alt="">
+            <span>Drone&nbsp;Simulator</span>
         </a>
-        <a class="ghost" href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <div class="top-right">
+            <span class="tag"><i class="dot"></i>WebGL ready</span>
+            <a class="ghost" href="https://github.com/4riful/drone-simulator" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub">
+                <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 19c-5 1-5-2-7-3M15 22v-4a3 3 0 0 0-1-2c3 0 6-1 6-6a5 5 0 0 0-1-3 4 4 0 0 0 0-3s-1 0-3 1a10 10 0 0 0-6 0C8 4 7 4 7 4a4 4 0 0 0 0 3 5 5 0 0 0-1 3c0 5 3 6 6 6a3 3 0 0 0-1 2v4"/></svg>
+                <span class="hide-sm">Source</span>
+            </a>
+        </div>
     </header>
 
-    <main class="setup">
-        <div class="lead">
-            <h1>Preflight</h1>
-            <p>Pick a mode and an airframe. Everything else is in the cockpit.</p>
-        </div>
+    <main class="stage">
 
-        <section class="field">
-            <div class="field-head">
-                <h2>Mode</h2>
+        <!-- ── left: live-looking readout, all values derived from the sim config ── -->
+        <section class="viz">
+
+            <div class="scope" aria-label="Andromeda Harbor Grid — operations area">
+                <div class="scope-label"><i class="dot"></i>ANDROMEDA HARBOR GRID<b>500&nbsp;m</b></div>
+                <svg class="scope-svg" viewBox="0 0 200 200" role="img" aria-label="Map of the operations area">
+                    <defs>
+                        <radialGradient id="scopeGlow" cx="50%" cy="50%">
+                            <stop offset="0%" stop-color="#63ff9c" stop-opacity=".10"/>
+                            <stop offset="100%" stop-color="#63ff9c" stop-opacity="0"/>
+                        </radialGradient>
+                        <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#63ff9c" stop-opacity=".38"/>
+                            <stop offset="100%" stop-color="#63ff9c" stop-opacity="0"/>
+                        </linearGradient>
+                        <clipPath id="scopeClip"><circle cx="100" cy="100" r="94"/></clipPath>
+                    </defs>
+
+                    <circle cx="100" cy="100" r="94" fill="url(#scopeGlow)"/>
+
+                    <g clip-path="url(#scopeClip)">
+                        <!-- city block lattice: 84 m blocks across a 500 m grid -->
+                        <g class="grid-lines">
+                            <path d="M66 0V200M100 0V200M134 0V200M0 66H200M0 100H200M0 134H200"/>
+                        </g>
+                        <!-- waterways, from CITY_MAP -->
+                        <rect class="water" x="0" y="57" width="200" height="14" rx="2"/>
+                        <rect class="water" x="132" y="22" width="9" height="156" rx="2"/>
+                        <rect class="bridge" x="112" y="55" width="6" height="18" rx="1"/>
+                        <!-- landmarks -->
+                        <rect class="pad" x="49" y="174" width="23" height="4" rx="1"/>
+                        <rect class="pad" x="145" y="182" width="23" height="11" rx="1"/>
+                        <!-- districts -->
+                        <g class="district">
+                            <circle cx="24" cy="168" r="17"/>
+                            <circle cx="68" cy="96" r="23"/>
+                            <circle cx="136" cy="52" r="18"/>
+                            <circle cx="168" cy="144" r="20"/>
+                        </g>
+                        <g class="sweep-g"><path d="M100 100 L100 6 A94 94 0 0 1 194 100 Z" fill="url(#sweep)"/></g>
+                    </g>
+
+                    <circle class="ring" cx="100" cy="100" r="94"/>
+                    <circle class="ring faint" cx="100" cy="100" r="63"/>
+                    <circle class="ring faint" cx="100" cy="100" r="32"/>
+
+                    <!-- spawn: SPAWN vector is (0, 30, 0) — dead centre, 30 m up -->
+                    <g class="blip"><circle cx="100" cy="100" r="3.4"/><circle class="pulse" cx="100" cy="100" r="3.4"/></g>
+                </svg>
+                <div class="scope-legend">
+                    <span><i class="sw district"></i>Districts</span>
+                    <span><i class="sw water"></i>Waterways</span>
+                    <span><i class="sw pad"></i>Airstrip · Harbor</span>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 3v6h-6"/></svg>
+                    <b><span data-count="173">0</span><em>km/h</em></b>
+                    <span>Top speed</span>
+                </div>
+                <div class="stat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V4M6 10l6-6 6 6"/></svg>
+                    <b><span data-count="4.3" data-dec="1">0</span><em>: 1</em></b>
+                    <span>Thrust / weight</span>
+                </div>
+                <div class="stat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16"/><path d="M4 18L16 6"/><path d="M9 18a7 7 0 0 1 2-5"/></svg>
+                    <b><span data-count="45">0</span><em>°</em></b>
+                    <span>Max bank</span>
+                </div>
+                <div class="stat">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5 7-11a7 7 0 1 0-14 0c0 6 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+                    <b><span data-count="7">0</span><em>sorties</em></b>
+                    <span>Story campaign</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── right: the actual form ── -->
+        <section class="panel">
+            <div class="lead">
+                <h1>Preflight</h1>
                 <p id="brief">Balanced solo sortie with hostiles, waypoints, fuel, weather, and scoring.</p>
             </div>
-            <div class="options" id="mode-grid" role="radiogroup" aria-label="Game mode">
-                <button class="option" type="button" data-mode="campaign" aria-pressed="false">
-                    <b>Campaign</b>
-                    <span>Operation Andromeda — 7 story sorties</span>
-                </button>
-                <button class="option active" type="button" data-mode="single" aria-pressed="true">
-                    <b>Single</b>
-                    <span>Solo combat sortie</span>
-                </button>
-                <button class="option" type="button" data-mode="training" aria-pressed="false">
-                    <b>Training</b>
-                    <span>No hostiles, learn the controls</span>
-                </button>
-                <button class="option" type="button" data-mode="freeflight" aria-pressed="false">
-                    <b>Free Flight</b>
-                    <span>Open city, nothing shooting back</span>
-                </button>
-                <button class="option" type="button" data-mode="multiplayer" aria-pressed="false">
-                    <b>Online Battle</b>
-                    <span>Two-player room <em>experimental</em></span>
-                </button>
-            </div>
-        </section>
 
-        <section class="field">
-            <div class="field-head">
+            <div class="group">
+                <h2>Mode</h2>
+                <div class="modes" id="mode-grid" role="radiogroup" aria-label="Game mode">
+                    <button class="opt" type="button" data-mode="campaign" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V4a6 6 0 0 1 8 0 6 6 0 0 0 8 0v9a6 6 0 0 1-8 0 6 6 0 0 0-8 0"/></svg>
+                        <b>Campaign</b><span>7 story sorties</span>
+                    </button>
+                    <button class="opt active" type="button" data-mode="single" aria-pressed="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+                        <b>Single</b><span>Solo combat</span>
+                    </button>
+                    <button class="opt" type="button" data-mode="training" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 4-9 4-9-4z"/><path d="M6 11v4c2 2 10 2 12 0v-4"/></svg>
+                        <b>Training</b><span>No hostiles</span>
+                    </button>
+                    <button class="opt" type="button" data-mode="freeflight" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15l18-9-8 17-2-7z"/></svg>
+                        <b>Free Flight</b><span>Open city</span>
+                    </button>
+                    <button class="opt wide" type="button" data-mode="multiplayer" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg>
+                        <b>Online Battle</b><span>Two-player room<i>beta</i></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="group">
                 <h2>Airframe</h2>
+                <div class="crafts" id="aircraft-grid" role="radiogroup" aria-label="Aircraft">
+                    <button class="opt active" type="button" data-aircraft="drone" aria-pressed="true">
+                        <svg class="rotors" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8L16 16M16 8L8 16"/><circle class="r" cx="6" cy="6" r="3"/><circle class="r" cx="18" cy="6" r="3"/><circle class="r" cx="6" cy="18" r="3"/><circle class="r" cx="18" cy="18" r="3"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.5"/></svg>
+                        <b>MQ-9 Reaper</b><span>Racing quad</span>
+                    </button>
+                    <button class="opt" type="button" data-aircraft="helicopter" aria-pressed="false">
+                        <svg class="rotors" viewBox="0 0 24 24" aria-hidden="true"><path class="r" d="M3 6h18"/><path d="M12 6v3"/><path d="M7 15a4 4 0 0 1 4-4h2l5 4v3H9z"/><path d="M18 16l4-2"/></svg>
+                        <b>MQ-8B Fire Scout</b><span>Rotorcraft</span>
+                    </button>
+                </div>
+                <!-- flight envelope: multipliers straight out of VEHICLE_PROFILES -->
+                <div class="envelope" id="envelope" aria-label="Flight envelope">
+                    <div class="bar"><span>Speed</span><i><u style="width:100%"></u></i><b>48 m/s</b></div>
+                    <div class="bar"><span>Climb</span><i><u style="width:100%"></u></i><b>20 m/s</b></div>
+                    <div class="bar"><span>Bank</span><i><u style="width:100%"></u></i><b>45°</b></div>
+                    <div class="bar"><span>Hover</span><i><u style="width:50%"></u></i><b>drifts</b></div>
+                </div>
             </div>
-            <div class="options two" id="aircraft-grid" role="radiogroup" aria-label="Aircraft">
-                <button class="option active" type="button" data-aircraft="drone" aria-pressed="true">
-                    <b>MQ-9 Reaper</b>
-                    <span>Fast and snappy · 48 m/s · 45° banks</span>
-                </button>
-                <button class="option" type="button" data-aircraft="helicopter" aria-pressed="false">
-                    <b>MQ-8B Fire Scout</b>
-                    <span>Slower, steadier · good for hover and landings</span>
-                </button>
-            </div>
-        </section>
 
-        <section class="field room" id="room-panel">
-            <div class="field-head">
+            <div class="group room" id="room-panel">
                 <h2>Battle room</h2>
+                <div class="room-row">
+                    <input id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off" spellcheck="false" aria-label="Battle code">
+                    <button id="btn-room-code" type="button">New</button>
+                    <button id="btn-join-room" type="button">Check</button>
+                    <button id="btn-copy-room" type="button">Invite</button>
+                </div>
                 <p id="room-status">Create a code, or paste the one you were sent.</p>
             </div>
-            <div class="room-row">
-                <input id="room-code" type="text" maxlength="24" placeholder="DRN-482K" autocomplete="off" spellcheck="false" aria-label="Battle code">
-                <button id="btn-room-code" type="button">New code</button>
-                <button id="btn-join-room" type="button">Check</button>
-                <button id="btn-copy-room" type="button">Copy invite</button>
-            </div>
+
+            <button class="launch" id="btn-launch" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <span class="launch-txt">Launch</span>
+                <span class="launch-note" id="launch-note">Single · MQ-9 Reaper</span>
+            </button>
         </section>
-
-        <button class="launch" id="btn-launch" type="button">
-            Launch
-            <span id="launch-note">Single · MQ-9 Reaper</span>
-        </button>
-
-        <footer class="foot">
-            <div class="keys">
-                <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</span>
-                <span><kbd>Q</kbd><kbd>E</kbd> yaw</span>
-                <span><kbd>Space</kbd> climb</span>
-                <span><kbd>Shift</kbd> descend</span>
-                <span><kbd>F</kbd> fire</span>
-                <span><kbd>Tab</kbd> boost</span>
-                <span><kbd>H</kbd> help</span>
-            </div>
-            <p class="note">Gamepad and touch controls are picked up automatically. Progress and pilot profiles stay in this browser.</p>
-        </footer>
     </main>
 
-    <script type="module" src="./src/home.js?v=preflight-20260805-1"></script>
+    <footer class="foot">
+        <div class="keys">
+            <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>move</span>
+            <span><kbd>Q</kbd><kbd>E</kbd>yaw</span>
+            <span><kbd>Space</kbd>climb</span>
+            <span><kbd>Shift</kbd>descend</span>
+            <span><kbd>F</kbd>fire</span>
+            <span><kbd>Tab</kbd>boost</span>
+        </div>
+        <p class="note">Gamepad &amp; touch auto-detected · progress stays in this browser</p>
+    </footer>
+</div>
+
+<script type="module" src="./src/home.js?v=fullpage-20260805-2"></script>
 </body>
 </html>
