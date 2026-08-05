@@ -4068,8 +4068,11 @@ function renderCampaignProgress(){
     const fill = document.getElementById('cmp-progress-fill');
     const label = document.getElementById('cmp-progress-label');
     if(fill) fill.style.width = `${(done/CAMPAIGN.length)*100}%`;
-    if(label) label.textContent = `${done} / ${CAMPAIGN.length} complete`;
+    if(label) label.textContent = `${done} / ${CAMPAIGN.length}`;
 }
+
+const TICK_SVG = '<svg class="cmp-item-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+const LOCK_SVG = '<svg class="cmp-item-mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
 function renderCampaignList(){
     renderCampaignProgress();
@@ -4078,16 +4081,26 @@ function renderCampaignList(){
     for(const m of CAMPAIGN){
         const unlocked=isUnlocked(campaignProgress,m.id);
         const done=campaignProgress.completed.includes(m.id);
+        /* Act headings are siblings of the buttons, not children — a heading
+         * nested inside a <button> is not selectable text and breaks the grid. */
+        if(m.act!==lastAct){
+            const act=document.createElement('div');
+            act.className='cmp-item-act';
+            act.textContent=m.act;
+            $cmpList.appendChild(act);
+            lastAct=m.act;
+        }
         const el=document.createElement('button');
         el.type='button';
         el.className='cmp-item'+(m.id===selectedMissionId?' active':'')+(unlocked?'':' locked')+(done?' done':'');
-        const actLine = m.act!==lastAct ? `<div class="cmp-item-act">${m.act}</div>` : '';
-        lastAct=m.act;
-        const best=campaignProgress.bestScores[m.id];
-        el.innerHTML=`${actLine}
-            <div class="cmp-item-no">SORTIE ${String(m.no).padStart(2,'0')}${unlocked?'':' — LOCKED'}</div>
-            <div class="cmp-item-name">${m.name}</div>
-            <div class="cmp-item-syn">${unlocked?m.synopsis:'Complete the previous sortie to unlock.'}${best?`<br>Best score: ${best}`:''}</div>`;
+        if(!unlocked) el.disabled=true;
+        el.innerHTML=`
+            <span class="cmp-item-no">${String(m.no).padStart(2,'0')}</span>
+            <span>
+                <span class="cmp-item-name">${unlocked?m.name:'Locked'}</span>
+                <span class="cmp-item-syn">${unlocked?m.synopsis:'Complete the previous sortie'}</span>
+            </span>
+            ${done?TICK_SVG:(unlocked?'':LOCK_SVG)}`;
         if(unlocked) el.addEventListener('click',()=>{selectedMissionId=m.id;renderCampaign();sndUiClick();});
         $cmpList.appendChild(el);
     }
@@ -4096,10 +4109,28 @@ function renderCampaignList(){
 function renderMissionDetail(){
     const m=missionById(selectedMissionId)||CAMPAIGN[0];
     paintHandler(handlerFor(m), $cmpPortrait, $cmpHandlerName, $cmpHandlerRole, $cmpHandlerBio);
+
+    document.getElementById('cmp-no').textContent = `Sortie ${String(m.no).padStart(2,'0')} · ${m.act}`;
+    document.getElementById('cmp-name').textContent = m.name;
+
+    /* Conditions as chips: what the sortie will actually feel like. */
+    const best = campaignProgress.bestScores[m.id];
+    const chips = [
+        ['', (TIME_PRESETS[m.time]||{}).label || m.time],
+        m.enemies ? ['hostile', `${m.enemies} hostiles`] : ['', 'No hostiles'],
+    ];
+    if(best) chips.push(['best', `Best ${best}`]);
+    document.getElementById('cmp-chips').innerHTML =
+        chips.map(([cls,txt])=>`<span class="cmp-chip ${cls}">${txt}</span>`).join('');
+
+    /* launchCampaignMission() already refuses a locked sortie; say so in the UI
+     * rather than offering a button that silently does nothing. */
+    const launchBtn = document.getElementById('btn-cmp-launch');
+    launchBtn.disabled = !isUnlocked(campaignProgress, m.id);
+
     $cmpBrief.innerHTML=m.briefing.map(p=>`<p>${p}</p>`).join('');
-    $cmpObjectives.innerHTML=`<div class="cmp-obj-h">SORTIE OBJECTIVES</div>`+
-        m.objectives.map((o,i)=>`<div class="cmp-obj"><span class="cmp-obj-i">${i+1}.</span><span>${o.text}</span></div>`).join('')+
-        `<div class="cmp-obj" style="margin-top:8px"><span class="cmp-obj-i">◷</span><span>Conditions: ${(TIME_PRESETS[m.time]||{}).label||m.time} · ${m.enemies?`${m.enemies} hostile airframes expected`:'no hostiles expected'}</span></div>`;
+    $cmpObjectives.innerHTML=`<div class="cmp-obj-h">Sortie objectives</div>`+
+        m.objectives.map((o,i)=>`<div class="cmp-obj"><span class="cmp-obj-i">${i+1}</span><span>${o.text}</span></div>`).join('');
 }
 
 function renderCampaign(){ renderCampaignList(); renderMissionDetail(); }
@@ -4191,14 +4222,17 @@ function openDebrief(){
     S.mode='debrief'; objMarker.visible=false; director=null;
     const h=handlerFor(mission);
     paintHandler(h, document.getElementById('dbf-portrait'), document.getElementById('dbf-handler-name'), document.getElementById('dbf-handler-role'), null);
-    document.getElementById('dbf-tag').textContent = ok ? 'SORTIE COMPLETE' : 'SORTIE FAILED';
+    document.querySelector('.dbf-card').classList.toggle('failed', !ok);
+    document.getElementById('dbf-tag').textContent = ok ? 'Sortie complete' : 'Sortie failed';
     document.getElementById('dbf-title').textContent = ok ? mission.name : `${mission.name} — ${reason}`;
     document.getElementById('dbf-text').innerHTML = ok
         ? `<p>${mission.debrief}</p><p><b>${mission.unlockText}</b></p>`
         : `<p>${reason}. ${h.name.split(' ').slice(-1)[0]} wants you back on the pad and airborne again.</p>`;
-    document.getElementById('dbf-stats').innerHTML=`<div class="cmp-obj-h">SORTIE RECORD</div>`+
-        [['Score',S.score],['Hostiles neutralised',S.kills],['Waypoints',S.rings],['Distance',`${Math.round(S.dist)} m`],['Hull',`${Math.max(0,Math.round(S.hp))}/${C.maxHP}`],['Fuel remaining',`${Math.round(WORLD.fuel)}%`]]
-            .map(([k,v])=>`<div class="cmp-obj"><span class="cmp-obj-i">›</span><span>${k}: ${v}</span></div>`).join('');
+    /* Tiles rather than a bullet list — six numbers should be scannable. */
+    document.getElementById('dbf-stats').innerHTML=
+        [['Score',S.score],['Hostiles',S.kills],['Waypoints',S.rings],
+         ['Distance',`${Math.round(S.dist)} m`],['Hull',`${Math.max(0,Math.round(S.hp))}`],['Fuel',`${Math.round(WORLD.fuel)}%`]]
+            .map(([k,v])=>`<div class="dbf-stat"><span>${k}</span><b>${v}</b></div>`).join('');
     const next=CAMPAIGN.find(x=>!campaignProgress.completed.includes(x.id));
     const $next=document.getElementById('btn-dbf-next');
     $next.style.display = (ok && next) ? '' : 'none';

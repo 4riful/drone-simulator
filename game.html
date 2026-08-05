@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drone Simulator</title>
-    <link rel="stylesheet" href="./src/styles.css?v=d54b08d1">
+    <link rel="stylesheet" href="./src/styles.css?v=e81e46ff">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- src/main.js imports the bare specifier 'three'. A bundler resolves that;
          a plain static host (GitHub Pages) does not, so ship an import map and a
@@ -170,58 +170,75 @@
 </div>
 <div id="campaign-screen" class="screen hidden">
     <div class="cmp-wrap">
-        <div class="cmp-head">
-            <span class="cmp-tag">CLASSIFIED // TASK FORCE TALON</span>
-            <h1>Operation Andromeda</h1>
-            <p class="cmp-sub">Andromeda Harbor went dark at 04:12. Seven sorties. One pilot.</p>
+        <header class="cmp-head">
+            <button class="cmp-back" id="btn-cmp-back" type="button" aria-label="Leave campaign">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+            </button>
+            <div class="cmp-title">
+                <span class="cmp-tag">Task Force Talon</span>
+                <h1>Operation Andromeda</h1>
+            </div>
             <div class="cmp-progress">
+                <span id="cmp-progress-label">0 / 7</span>
                 <div class="cmp-progress-track"><div class="cmp-progress-fill" id="cmp-progress-fill"></div></div>
-                <span id="cmp-progress-label">0 / 7 complete</span>
             </div>
-        </div>
+        </header>
+
         <div class="cmp-body">
-            <div class="cmp-list" id="cmp-list"></div>
-            <div class="cmp-detail">
-                <div class="cmp-handler">
-                    <div class="cmp-portrait" id="cmp-portrait">EV</div>
-                    <div class="cmp-handler-txt">
-                        <div class="cmp-handler-name" id="cmp-handler-name">Maj. Elena Voss</div>
-                        <div class="cmp-handler-role" id="cmp-handler-role">Mission Handler — FOB ANVIL</div>
-                        <div class="cmp-handler-bio" id="cmp-handler-bio"></div>
+            <nav class="cmp-list" id="cmp-list" aria-label="Sortie select"></nav>
+
+            <section class="cmp-detail">
+                <div class="cmp-detail-scroll">
+                    <div class="cmp-detail-head">
+                        <span class="cmp-no" id="cmp-no">Sortie 01</span>
+                        <div class="cmp-chips" id="cmp-chips"></div>
                     </div>
+                    <h2 class="cmp-name" id="cmp-name">First Light</h2>
+
+                    <div class="cmp-handler">
+                        <div class="cmp-portrait" id="cmp-portrait">EV</div>
+                        <div class="cmp-handler-txt">
+                            <div class="cmp-handler-name" id="cmp-handler-name">Maj. Elena Voss</div>
+                            <div class="cmp-handler-role" id="cmp-handler-role">Mission Handler</div>
+                            <div class="cmp-handler-bio" id="cmp-handler-bio"></div>
+                        </div>
+                    </div>
+
+                    <div class="cmp-brief" id="cmp-brief"></div>
+                    <div class="cmp-objectives" id="cmp-objectives"></div>
                 </div>
-                <div class="cmp-brief" id="cmp-brief"></div>
-                <div class="cmp-objectives" id="cmp-objectives"></div>
                 <div class="cmp-actions">
-                    <button class="btn btn-primary" id="btn-cmp-launch">Launch Sortie</button>
-                    <button class="btn" id="btn-cmp-back">Back</button>
+                    <button class="cmp-launch" id="btn-cmp-launch" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                        Launch Sortie
+                    </button>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 </div>
+
 <div id="debrief-screen" class="screen hidden">
-    <div class="cmp-wrap">
-        <div class="cmp-head">
-            <span class="cmp-tag" id="dbf-tag">SORTIE COMPLETE</span>
-            <h1 id="dbf-title">Mission Complete</h1>
-        </div>
-        <div class="cmp-body cmp-body-single">
-            <div class="cmp-detail">
-                <div class="cmp-handler">
-                    <div class="cmp-portrait" id="dbf-portrait">EV</div>
-                    <div class="cmp-handler-txt">
-                        <div class="cmp-handler-name" id="dbf-handler-name">Maj. Elena Voss</div>
-                        <div class="cmp-handler-role" id="dbf-handler-role">Mission Handler — FOB ANVIL</div>
-                    </div>
+    <div class="dbf-wrap">
+        <div class="dbf-card">
+            <div class="dbf-banner" id="dbf-tag">Sortie Complete</div>
+            <h1 class="dbf-title" id="dbf-title">Mission Complete</h1>
+
+            <div class="cmp-handler dbf-handler">
+                <div class="cmp-portrait" id="dbf-portrait">EV</div>
+                <div class="cmp-handler-txt">
+                    <div class="cmp-handler-name" id="dbf-handler-name">Maj. Elena Voss</div>
+                    <div class="cmp-handler-role" id="dbf-handler-role">Mission Handler</div>
                 </div>
-                <div class="cmp-brief" id="dbf-text"></div>
-                <div class="cmp-objectives" id="dbf-stats"></div>
-                <div class="cmp-actions">
-                    <button class="btn btn-primary" id="btn-dbf-next">Next Sortie</button>
-                    <button class="btn" id="btn-dbf-retry">Fly Again</button>
-                    <button class="btn" id="btn-dbf-menu">Return to Base</button>
-                </div>
+            </div>
+
+            <div class="cmp-brief dbf-text" id="dbf-text"></div>
+            <div class="dbf-stats" id="dbf-stats"></div>
+
+            <div class="cmp-actions dbf-actions">
+                <button class="cmp-launch" id="btn-dbf-next" type="button">Next Sortie</button>
+                <button class="cmp-ghost" id="btn-dbf-retry" type="button">Fly Again</button>
+                <button class="cmp-ghost" id="btn-dbf-menu" type="button">Return to Base</button>
             </div>
         </div>
     </div>
@@ -314,7 +331,7 @@
         </div>
     </div>
 </div>
-<script type="module" src="./src/main.js?v=9d6e3e77"></script>
+<script type="module" src="./src/main.js?v=8937669a"></script>
 <script>
     /* If main.js never executes — unresolved import, syntax error, no WebGL —
      * the boot screen would sit at 0% forever. Fail loudly instead.
