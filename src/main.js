@@ -1402,12 +1402,24 @@ function initWinTex(count) {
 
 const roofMat = new THREE.MeshStandardMaterial({color:0x606868, roughness:.85, metalness:.12});
 
+/* Real skylines are made of four or five materials, not twenty-five hues. The
+ * old palette was 25 colours all sitting at the same mid-grey value with a
+ * different tint each — green, lilac, blue — which averages out to muddy and
+ * reads as "generated". Group by actual material and let the *value* vary
+ * instead: concrete and limestone are much lighter than glass curtain wall, and
+ * brick is the only genuinely saturated thing on the street. */
 const bldgBaseColors = [
-    0x8a8a88, 0x989088, 0x7a8088, 0xa09888, 0x909098,
-    0x988880, 0x808890, 0x908878, 0x788888, 0xa08878,
-    0x8890a0, 0x909888, 0xa08878, 0x789080, 0x988888,
-    0x88a090, 0x8888a0, 0xa09870, 0x809888, 0x908898,
-    0xb0a898, 0x889098, 0xa09080, 0x98a0a0, 0x8a8080,
+    /* concrete / precast — the bulk of any city */
+    0x9c9a95, 0x8e8c86, 0xa8a59e, 0x83817b, 0xb2afa7,
+    0x94918a, 0xa09d96, 0x8a8781,
+    /* limestone / render / sandstone */
+    0xc3b69c, 0xb0a288, 0xd2c7ae, 0xa89a80, 0xbfb298,
+    /* brick */
+    0x8d5a46, 0x9d6b53, 0x7a4a3b, 0xa5745c,
+    /* glass curtain wall — darker and cooler than everything else */
+    0x4d5866, 0x3f4a57, 0x5b6674, 0x46515e, 0x6a7684,
+    /* painted / white panel */
+    0xd9d7d1, 0xc6c4be, 0xe2e0d9,
 ];
 const bldgEmissiveColors = [
     0x1a2028, 0x201818, 0x182020, 0x201c18, 0x181c28,
@@ -1661,7 +1673,7 @@ function generateCity() {
     /* Road asphalt texture */
     const rdCv=document.createElement('canvas');rdCv.width=128;rdCv.height=128;
     const rdCx=rdCv.getContext('2d');
-    rdCx.fillStyle='#484848';rdCx.fillRect(0,0,128,128);
+    rdCx.fillStyle='#3c3a38';rdCx.fillRect(0,0,128,128);
     for(let i=0;i<300;i++){const v=42+Math.floor(Math.random()*30);rdCx.fillStyle=`rgba(${v},${v},${v+2},${0.2+Math.random()*0.25})`;rdCx.fillRect(Math.random()*128,Math.random()*128,1+Math.random()*3,1+Math.random()*2);}
     for(let i=0;i<8;i++){rdCx.strokeStyle=`rgba(35,35,38,${0.3+Math.random()*0.3})`;rdCx.lineWidth=.5;rdCx.beginPath();rdCx.moveTo(Math.random()*128,Math.random()*128);rdCx.lineTo(Math.random()*128,Math.random()*128);rdCx.stroke();}
     const rdTex=new THREE.CanvasTexture(rdCv);rdTex.wrapS=rdTex.wrapT=THREE.RepeatWrapping;
@@ -1670,11 +1682,11 @@ function generateCity() {
     for(let i=0;i<=blocks;i++){
         const pos=(i-half)*C.blockSize;
         const rtH=rdTex.clone();rtH.repeat.set(Math.ceil((C.citySize+80)/10),1);rtH.needsUpdate=true;
-        const rmH=new THREE.MeshStandardMaterial({color:0x505050,map:rtH,roughness:.8,metalness:.05});
+        const rmH=new THREE.MeshStandardMaterial({color:0x474542,map:rtH,roughness:.85,metalness:.04});
         const rH=new THREE.Mesh(new THREE.PlaneGeometry(C.citySize+80,7),rmH);
         rH.rotation.x=-Math.PI/2; rH.position.set(0,.01,pos); tagShadows(rH,false,true); scene.add(rH);
         const rtV=rdTex.clone();rtV.repeat.set(1,Math.ceil((C.citySize+80)/10));rtV.needsUpdate=true;
-        const rmV=new THREE.MeshStandardMaterial({color:0x505050,map:rtV,roughness:.8,metalness:.05});
+        const rmV=new THREE.MeshStandardMaterial({color:0x474542,map:rtV,roughness:.85,metalness:.04});
         const rV=new THREE.Mesh(new THREE.PlaneGeometry(7,C.citySize+80),rmV);
         rV.rotation.x=-Math.PI/2; rV.position.set(pos,.01,0); tagShadows(rV,false,true); scene.add(rV);
     }

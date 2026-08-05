@@ -85,23 +85,49 @@ export function createOcean(scene, opts = {}) {
     detail.repeat.set(60, 60);
     waterMat.roughnessMap = detail;
 
-    const uniforms = { uTime: { value: 0 }, uWave: { value: opts.waveHeight ?? 1.0 } };
+    const uniforms = {
+        uTime:    { value: 0 },
+        uWave:    { value: opts.waveHeight ?? 1.0 },
+        uDeep:    { value: new THREE.Color(tint.deep) },
+        uShallow: { value: new THREE.Color(tint.shallow) },
+        uFoam:    { value: new THREE.Color(tint.foam) },
+        uSky:     { value: new THREE.Color(tint.shallow).multiplyScalar(1.9) },
+        uShore:   { value: LAND_RADIUS + 26 },
+        uSun:     { value: tint.sun },
+    };
+
     waterMat.onBeforeCompile = (shader) => {
-        shader.uniforms.uTime = uniforms.uTime;
-        shader.uniforms.uWave = uniforms.uWave;
+        Object.assign(shader.uniforms, uniforms);
+
         shader.vertexShader = shader.vertexShader
             .replace('#include <common>', `
                 #include <common>
                 uniform float uTime;
                 uniform float uWave;
-                /* Three crossing swells at different angles and speeds. Any two
-                 * would visibly repeat; three is enough to hide the period. */
-                float swell(vec2 p){
-                    float h  = sin(p.x * 0.018 + uTime * 0.9) * 0.55;
-                    h += sin(p.y * 0.023 - uTime * 0.7) * 0.42;
-                    h += sin((p.x + p.y) * 0.011 + uTime * 1.3) * 0.3;
-                    h += sin((p.x - p.y) * 0.037 - uTime * 1.9) * 0.12;
-                    return h * uWave;
+                varying vec3 vWPos;
+                varying float vWaveH;
+
+                /* Gerstner-style: each wave also pulls the surface horizontally
+                 * toward its crest, which is what sharpens peaks and flattens
+                 * troughs. Pure sine displacement gives rolling hills — readable
+                 * as "water" only because it is blue.
+                 *
+                 * xy = horizontal pull, z = height. Four trains at different
+                 * angles, wavelengths and speeds; fewer than that and the
+                 * interference pattern repeats visibly from the air. */
+                vec3 gerstner(vec2 p, vec2 dir, float steep, float len, float speed){
+                    float k = 6.28318 / len;
+                    float f = k * (dot(dir, p) - speed * uTime);
+                    float a = steep / k;
+                    return vec3(dir * a * cos(f), a * sin(f));
+                }
+                vec3 waves(vec2 p){
+                    vec3 w = vec3(0.0);
+                    w += gerstner(p, normalize(vec2( 1.0,  0.35)), 0.62, 118.0, 11.0);
+                    w += gerstner(p, normalize(vec2(-0.6,  1.0 )), 0.48,  73.0,  8.5);
+                    w += gerstner(p, normalize(vec2( 0.75, -0.8)), 0.32,  41.0,  6.5);
+                    w += gerstner(p, normalize(vec2(-0.2, -1.0 )), 0.22,  23.0,  4.5);
+                    return w * uWave;
                 }
             `)
             /* The normal has to be set in beginnormal_vertex: <normal_vertex>
@@ -111,15 +137,58 @@ export function createOcean(scene, opts = {}) {
             .replace('#include <beginnormal_vertex>', `
                 #include <beginnormal_vertex>
                 {
-                    float h0 = swell(position.xy);
-                    float hx = swell(position.xy + vec2(2.0, 0.0));
-                    float hy = swell(position.xy + vec2(0.0, 2.0));
-                    objectNormal = normalize(vec3(-(hx - h0), -(hy - h0), 2.0));
+                    vec3 w0 = waves(position.xy);
+                    vec3 wx = waves(position.xy + vec2(2.5, 0.0));
+                    vec3 wy = waves(position.xy + vec2(0.0, 2.5));
+                    objectNormal = normalize(vec3(-(wx.z - w0.z), -(wy.z - w0.z), 2.5));
                 }
             `)
             .replace('#include <begin_vertex>', `
                 #include <begin_vertex>
-                transformed.z += swell(position.xy);
+                {
+                    vec3 w = waves(position.xy);
+                    transformed.xy += w.xy;
+                    transformed.z  += w.z;
+                    vWaveH = w.z;
+                    vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                }
+            `);
+
+        shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', `
+                #include <common>
+                uniform vec3 uDeep;
+                uniform vec3 uShallow;
+                uniform vec3 uFoam;
+                uniform vec3 uSky;
+                uniform float uShore;
+                uniform float uSun;
+                varying vec3 vWPos;
+                varying float vWaveH;
+            `)
+            .replace('#include <color_fragment>', `
+                #include <color_fragment>
+                {
+                    float d = length(vWPos.xz);
+                    /* Shelving water: pale near the beach, dark out to sea. */
+                    float shallowT = smoothstep(uShore + 420.0, uShore - 20.0, d);
+                    vec3 water = mix(uDeep, uShallow, shallowT);
+                    /* Breaking crests, and a band of surf along the shoreline. */
+                    float crest = smoothstep(0.55, 1.5, vWaveH);
+                    float surf = 1.0 - smoothstep(0.0, 55.0, abs(d - uShore));
+                    water = mix(water, uFoam, clamp(crest * 0.45 + surf * 0.55, 0.0, 1.0));
+                    diffuseColor.rgb = water;
+                }
+            `)
+            /* Cheap Fresnel: water is nearly a mirror at grazing angles and
+             * nearly clear straight down. Without it the surface reads as
+             * coloured plastic no matter how good the waves are. */
+            .replace('#include <emissivemap_fragment>', `
+                #include <emissivemap_fragment>
+                {
+                    float fres = pow(1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0), 4.0);
+                    totalEmissiveRadiance += uSky * fres * (0.10 + uSun * 0.30);
+                }
             `);
     };
 
@@ -192,25 +261,78 @@ export function createOcean(scene, opts = {}) {
         group.add(g);
     }
 
-    /* ---- gulls ---- */
+    /* ---- gulls ----
+     * A gull is a body, two swept wings hinged at the shoulder, and a tail.
+     * Two spinning rectangles do not read as a bird from any distance.
+     *
+     * The flight matters more than the model: real gulls glide far more than
+     * they flap, bank into their turns, and ride a wandering path rather than a
+     * perfect circle. All three are cheap to fake and all three are what the eye
+     * actually uses to tell "bird" from "moving object". */
+    function wingShape(span, chord) {
+        const shape = new THREE.Shape();
+        shape.moveTo(0, -chord * 0.5);
+        shape.quadraticCurveTo(span * 0.45, -chord * 0.75, span, -chord * 0.12);
+        shape.lineTo(span, chord * 0.06);
+        shape.quadraticCurveTo(span * 0.5, chord * 0.5, 0, chord * 0.5);
+        shape.closePath();
+        return new THREE.ShapeGeometry(shape, 6);
+    }
+
     const gulls = [];
-    const gullCount = quality === 'low' ? 10 : 22;
-    const gullMat = new THREE.MeshBasicMaterial({ color: 0xf2f2ee, side: THREE.DoubleSide });
-    const wingGeo = new THREE.PlaneGeometry(3.2, 0.7);
+    const gullCount = quality === 'low' ? 12 : 26;
+    const gullMat = new THREE.MeshLambertMaterial({ color: 0xf4f4f0, side: THREE.DoubleSide });
+    const gullDark = new THREE.MeshLambertMaterial({ color: 0x9aa3ab, side: THREE.DoubleSide });
+    const wingGeoL = wingShape(-1.55, 0.62);
+    const wingGeoR = wingShape(1.55, 0.62);
+    const bodyGeo = new THREE.CapsuleGeometry(0.16, 0.78, 4, 8);
+    const tailGeo = wingShape(0.42, 0.5);
+
     for (let i = 0; i < gullCount; i++) {
         const g = new THREE.Group();
-        const l = new THREE.Mesh(wingGeo, gullMat);
-        const r = new THREE.Mesh(wingGeo, gullMat);
-        l.position.x = -1.7; r.position.x = 1.7;
-        g.add(l, r);
+
+        const body = new THREE.Mesh(bodyGeo, gullMat);
+        body.rotation.x = Math.PI / 2;
+        g.add(body);
+
+        /* Shoulders are separate groups so the wing pivots at the body rather
+         * than around its own centre — a wing that rotates about its middle
+         * flaps through the fuselage. */
+        const shoulderL = new THREE.Group();
+        const shoulderR = new THREE.Group();
+        shoulderL.add(new THREE.Mesh(wingGeoL, i % 4 === 0 ? gullDark : gullMat));
+        shoulderR.add(new THREE.Mesh(wingGeoR, i % 4 === 0 ? gullDark : gullMat));
+        shoulderL.rotation.x = shoulderR.rotation.x = -Math.PI / 2;
+        g.add(shoulderL, shoulderR);
+
+        const tail = new THREE.Mesh(tailGeo, gullMat);
+        tail.rotation.x = -Math.PI / 2;
+        tail.rotation.z = Math.PI / 2;
+        tail.position.z = 0.52;
+        g.add(tail);
+
+        const scale = 1.5 + Math.random() * 1.1;
+        g.scale.setScalar(scale);
+        /* Yaw -> pitch -> roll, so the bank is applied about the bird's own
+         * forward axis instead of the world's. Default XYZ rolls first. */
+        g.rotation.order = 'YXZ';
+
         gulls.push({
-            mesh: g, wingL: l, wingR: r,
-            radius: 120 + Math.random() * 700,
+            mesh: g, shoulderL, shoulderR,
+            /* Two radii and a phase turn the circle into a drifting ellipse. */
+            radius: 140 + Math.random() * 820,
+            wobbleR: 40 + Math.random() * 120,
+            wobbleRate: 0.05 + Math.random() * 0.12,
             angle: Math.random() * Math.PI * 2,
-            speed: 0.05 + Math.random() * 0.06,
-            height: 45 + Math.random() * 90,
+            speed: (0.03 + Math.random() * 0.05) * (Math.random() > 0.35 ? 1 : -1),
+            height: 38 + Math.random() * 120,
+            bobRate: 0.25 + Math.random() * 0.4,
             flap: Math.random() * Math.PI * 2,
-            flapRate: 6 + Math.random() * 5,
+            flapRate: 7 + Math.random() * 4,
+            /* Glide/flap cycle: mostly gliding, with bursts of flapping. */
+            glidePhase: Math.random() * Math.PI * 2,
+            glideRate: 0.16 + Math.random() * 0.22,
+            prevAngle: 0,
         });
         group.add(g);
     }
@@ -251,17 +373,33 @@ export function createOcean(scene, opts = {}) {
             }
 
             for (const g of gulls) {
+                g.prevAngle = g.angle;
                 g.angle += g.speed * dt;
                 g.flap += dt * g.flapRate;
-                const wing = Math.sin(g.flap) * 0.9;
-                g.wingL.rotation.z = wing;
-                g.wingR.rotation.z = -wing;
+                g.glidePhase += dt * g.glideRate;
+
+                /* Gulls glide most of the time and flap in bursts. Constant
+                 * flapping is the single biggest tell of a fake bird. */
+                const burst = Math.max(0, Math.sin(g.glidePhase));
+                const amount = 0.08 + Math.pow(burst, 2.0) * 0.85;
+                const beat = Math.sin(g.flap) * amount;
+                /* Downstroke is faster and deeper than the recovery. */
+                const stroke = beat > 0 ? beat : beat * 0.55;
+                g.shoulderL.rotation.y = stroke;
+                g.shoulderR.rotation.y = -stroke;
+
+                const r = g.radius + Math.sin(g.angle * 2.3 + g.wobbleRate * 40) * g.wobbleR;
                 g.mesh.position.set(
-                    Math.cos(g.angle) * g.radius,
-                    g.height + Math.sin(g.flap * 0.2) * 8,
-                    Math.sin(g.angle) * g.radius,
+                    Math.cos(g.angle) * r,
+                    g.height + Math.sin(g.glidePhase * 1.7) * 11 + stroke * 1.2,
+                    Math.sin(g.angle) * r,
                 );
-                g.mesh.rotation.y = -g.angle;
+
+                /* Bank into the turn, and pitch slightly nose-up while climbing. */
+                const turn = (g.angle - g.prevAngle) / Math.max(dt, 1e-4);
+                g.mesh.rotation.y = -g.angle + (g.speed > 0 ? -Math.PI / 2 : Math.PI / 2);
+                g.mesh.rotation.z = THREE.MathUtils.clamp(turn * 4.5, -0.75, 0.75);
+                g.mesh.rotation.x = Math.cos(g.glidePhase * 1.7) * 0.12;
             }
         },
     };
