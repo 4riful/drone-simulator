@@ -1,8 +1,12 @@
-/* Ocean, coastline and the things that live on them.
+/* Coastline and the things that live on it.
  *
- * The city sits on an island. Land is a noisy disc so the coast never reads as
- * a square, the ocean is one large plane that follows the camera so it always
- * reaches the horizon, and a foam ring marks the waterline.
+ * The city is coastal, not an island: land continues north, east and west, and
+ * the water starts south of the harbour at SHORE_Z and runs to the horizon.
+ *
+ * The ocean plane is deliberately anchored in Z and only tracks the camera in
+ * X. Surrounding the city with water meant the plane sat underneath the streets,
+ * and any mistake in wave height put surf through the downtown core. With the
+ * water south of a fixed line that is not possible at all.
  *
  * Waves are displaced in the vertex shader via onBeforeCompile rather than by
  * touching geometry from JS each frame — the grid is 128x128, which is 16k
@@ -20,24 +24,24 @@ const WATER_TINTS = {
     storm:  { shallow: 0x1f3540, deep: 0x0a161d, foam: 0x9aa8ae, sun: 0.2 },
 };
 
-const LAND_RADIUS = 780;      /* city half-extent is 250, so there is real shore */
+/* City half-extent is 250 and the roads overhang to ~290, so the waterline sits
+ * comfortably clear of anything built. */
+export const SHORE_Z = 430;
 const OCEAN_SIZE = 9000;
 
-function noisyDisc(radius, segments) {
-    const geo = new THREE.CircleGeometry(radius, segments);
+/* Beach as a long strip with a wandering seaward edge, so the coast is never a
+ * ruler-straight line. */
+function beachStrip(width, depth, segments) {
+    const geo = new THREE.PlaneGeometry(width, depth, segments, 1);
     const pos = geo.attributes.position;
-    /* Skip vertex 0 — CircleGeometry puts the centre there and pushing it would
-     * tear the fan. */
-    for (let i = 1; i < pos.count; i++) {
-        const x = pos.getX(i), z = pos.getY(i);
-        const a = Math.atan2(z, x);
-        const wobble =
-            Math.sin(a * 3.0) * 26 +
-            Math.sin(a * 7.3 + 1.7) * 14 +
-            Math.sin(a * 13.1 + 0.4) * 7;
-        const r = radius + wobble;
-        const len = Math.hypot(x, z) || 1;
-        pos.setXY(i, (x / len) * r, (z / len) * r);
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        /* Only the seaward row moves; the landward row stays buried under the
+         * ground plane so no gap can open behind the sand. */
+        if (pos.getY(i) > 0) {
+            const wobble = Math.sin(x * 0.006) * 16 + Math.sin(x * 0.017 + 1.3) * 9 + Math.sin(x * 0.041 + 0.6) * 4;
+            pos.setY(i, pos.getY(i) + wobble);
+        }
     }
     pos.needsUpdate = true;
     geo.computeVertexNormals();
@@ -92,7 +96,7 @@ export function createOcean(scene, opts = {}) {
         uShallow: { value: new THREE.Color(tint.shallow) },
         uFoam:    { value: new THREE.Color(tint.foam) },
         uSky:     { value: new THREE.Color(tint.shallow).multiplyScalar(1.9) },
-        uShore:   { value: LAND_RADIUS + 26 },
+        uShoreZ:  { value: SHORE_Z },
         uSun:     { value: tint.sun },
     };
 
@@ -104,7 +108,7 @@ export function createOcean(scene, opts = {}) {
                 #include <common>
                 uniform float uTime;
                 uniform float uWave;
-                uniform float uShore;
+                uniform float uShoreZ;
                 varying vec3 vWPos;
                 varying float vWaveH;
 
@@ -130,9 +134,10 @@ export function createOcean(scene, opts = {}) {
                     w += gerstner(worldXZ, normalize(vec2(-0.6,  1.0 )), 0.52,  73.0,  8.5, 0.5);
                     w += gerstner(worldXZ, normalize(vec2( 0.75, -0.8)), 0.26,  41.0,  6.5, 0.45);
                     w += gerstner(worldXZ, normalize(vec2(-0.2, -1.0 )), 0.13,  23.0,  4.5, 0.4);
-                    /* Swell shoals and dies as it runs into the beach. Also keeps
-                     * crests from ever reaching the sand. */
-                    float shoal = smoothstep(uShore - 30.0, uShore + 300.0, length(worldXZ));
+                    /* Swell shoals and dies as it runs into the beach, so no
+                     * crest ever reaches the sand — let alone the city, which is
+                     * on the far side of the shoreline entirely. */
+                    float shoal = smoothstep(uShoreZ + 10.0, uShoreZ + 320.0, worldXZ.y);
                     return w * uWave * shoal;
                 }
             `)
@@ -178,7 +183,7 @@ export function createOcean(scene, opts = {}) {
                 uniform vec3 uShallow;
                 uniform vec3 uFoam;
                 uniform vec3 uSky;
-                uniform float uShore;
+                uniform float uShoreZ;
                 uniform float uSun;
                 varying vec3 vWPos;
                 varying float vWaveH;
@@ -186,13 +191,13 @@ export function createOcean(scene, opts = {}) {
             .replace('#include <color_fragment>', `
                 #include <color_fragment>
                 {
-                    float d = length(vWPos.xz);
-                    /* Shelving water: pale near the beach, dark out to sea. */
-                    float shallowT = smoothstep(uShore + 420.0, uShore - 20.0, d);
+                    float d = vWPos.z - uShoreZ;          /* metres out to sea */
+                    /* Shelving water: pale over the shallows, dark offshore. */
+                    float shallowT = smoothstep(430.0, -20.0, d);
                     vec3 water = mix(uDeep, uShallow, shallowT);
-                    /* Breaking crests, and a band of surf along the shoreline. */
+                    /* Breaking crests, and a band of surf along the waterline. */
                     float crest = smoothstep(0.55, 1.2, vWaveH);
-                    float surf = 1.0 - smoothstep(0.0, 45.0, abs(d - uShore));
+                    float surf = 1.0 - smoothstep(0.0, 45.0, abs(d));
                     water = mix(water, uFoam, clamp(crest * 0.35 + surf * 0.5, 0.0, 1.0));
                     diffuseColor.rgb = water;
                 }
@@ -212,14 +217,17 @@ export function createOcean(scene, opts = {}) {
     const water = new THREE.Mesh(new THREE.PlaneGeometry(OCEAN_SIZE, OCEAN_SIZE, segs, segs), waterMat);
     water.rotation.x = -Math.PI / 2;
     water.position.y = -1.6;
+    /* Fixed in Z: the sea starts at the shoreline and runs south. Only X tracks
+     * the camera. */
+    water.position.z = SHORE_Z + OCEAN_SIZE / 2;
     water.renderOrder = -1;
     group.add(water);
 
     /* ---- land + beach ---- */
     const beachMat = new THREE.MeshStandardMaterial({ color: 0x9d8c6a, roughness: 0.95 });
-    const beach = new THREE.Mesh(noisyDisc(LAND_RADIUS + 26, 128), beachMat);
+    const beach = new THREE.Mesh(beachStrip(6000, 120, 160), beachMat);
     beach.rotation.x = -Math.PI / 2;
-    beach.position.y = -0.55;
+    beach.position.set(0, -0.55, SHORE_Z - 60);
     beach.receiveShadow = true;
     group.add(beach);
 
@@ -227,9 +235,9 @@ export function createOcean(scene, opts = {}) {
     const foamMat = new THREE.MeshBasicMaterial({
         color: tint.foam, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide,
     });
-    const foam = new THREE.Mesh(new THREE.RingGeometry(LAND_RADIUS + 10, LAND_RADIUS + 44, 128), foamMat);
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(6000, 46), foamMat);
     foam.rotation.x = -Math.PI / 2;
-    foam.position.y = -1.2;
+    foam.position.set(0, -0.9, SHORE_Z + 16);
     group.add(foam);
 
     /* ---- boats ---- */
@@ -267,7 +275,7 @@ export function createOcean(scene, opts = {}) {
         g.add(wake);
 
         /* Wide, slow circuits well outside the shoreline. */
-        const radius = LAND_RADIUS + 180 + i * 130;
+        const radius = 260 + i * 150;
         boats.push({
             mesh: g, lamp,
             radius,
@@ -337,7 +345,7 @@ export function createOcean(scene, opts = {}) {
         gulls.push({
             mesh: g, shoulderL, shoulderR,
             /* Two radii and a phase turn the circle into a drifting ellipse. */
-            radius: 140 + Math.random() * 820,
+            radius: 90 + Math.random() * 380,
             wobbleR: 40 + Math.random() * 120,
             wobbleRate: 0.05 + Math.random() * 0.12,
             angle: Math.random() * Math.PI * 2,
@@ -350,6 +358,10 @@ export function createOcean(scene, opts = {}) {
             glidePhase: Math.random() * Math.PI * 2,
             glideRate: 0.16 + Math.random() * 0.22,
             prevAngle: 0,
+            /* Scattered along the coast and a little way inland, the way gulls
+             * actually distribute — not all orbiting one point. */
+            centerX: (Math.random() - 0.5) * 1400,
+            centerZ: SHORE_Z - 120 + Math.random() * 700,
         });
         group.add(g);
     }
@@ -357,7 +369,7 @@ export function createOcean(scene, opts = {}) {
     let time = 0;
 
     return {
-        landRadius: LAND_RADIUS,
+        shoreZ: SHORE_Z,
 
         setTimeOfDay(key) {
             const t = WATER_TINTS[key] || WATER_TINTS.dusk;
@@ -382,7 +394,11 @@ export function createOcean(scene, opts = {}) {
 
             for (const b of boats) {
                 b.angle += b.speed * dt;
-                b.mesh.position.set(Math.cos(b.angle) * b.radius, 0, Math.sin(b.angle) * b.radius);
+                b.mesh.position.set(
+                Math.cos(b.angle) * b.radius,
+                0,
+                SHORE_Z + 420 + Math.sin(b.angle) * b.radius,
+            );
                 b.mesh.rotation.y = -b.angle + (b.speed > 0 ? Math.PI / 2 : -Math.PI / 2);
                 b.bob += dt * 1.4;
                 b.mesh.position.y = -1.2 + Math.sin(b.bob) * 0.5;
@@ -407,9 +423,9 @@ export function createOcean(scene, opts = {}) {
 
                 const r = g.radius + Math.sin(g.angle * 2.3 + g.wobbleRate * 40) * g.wobbleR;
                 g.mesh.position.set(
-                    Math.cos(g.angle) * r,
+                    g.centerX + Math.cos(g.angle) * r,
                     g.height + Math.sin(g.glidePhase * 1.7) * 11 + stroke * 1.2,
-                    Math.sin(g.angle) * r,
+                    g.centerZ + Math.sin(g.angle) * r,
                 );
 
                 /* Bank into the turn, and pitch slightly nose-up while climbing. */

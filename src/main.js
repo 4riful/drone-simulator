@@ -1,12 +1,12 @@
 
 import * as THREE from 'three';
-import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js';
-import { createPostFX } from './render/postfx.js';
-import { createOcean } from './render/ocean.js';
+import { createAtmosphere, TIME_PRESETS } from './render/atmosphere.js?v=b9d60f3a';
+import { createPostFX } from './render/postfx.js?v=25e17e76';
+import { createOcean, SHORE_Z } from './render/ocean.js?v=84ab1655';
 import {
     CAMPAIGN, CHARACTERS, handlerFor, missionById, MissionDirector,
     STORY_LOCATIONS, normalizeProgress, isUnlocked, markComplete, defaultProgress,
-} from './story/campaign.js';
+} from './story/campaign.js?v=468b5d55';
 
 const SUPABASE_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -1305,11 +1305,12 @@ async function trackOnlineState(force=false){
 /* Sky, stars and clouds come from the atmosphere rig (src/render/atmosphere.js). */
 
 /* Ground */
-/* The city sits on an island now, so the ground is a disc a little inside the
- * beach rather than a 3 km plane running past the horizon. createOcean() draws
- * the shoreline and everything beyond it. */
-const gnd=new THREE.Mesh(new THREE.CircleGeometry(740,96),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
-gnd.rotation.x=-Math.PI/2; gnd.position.y=-0.1; tagShadows(gnd,false,true); scene.add(gnd);
+/* Land runs to the horizon north, east and west and stops at the waterline to
+ * the south, where createOcean() takes over. Offsetting a 3 km plane rather
+ * than surrounding the city with water means the sea is never underneath the
+ * streets, so no wave height mistake can ever put surf downtown. */
+const gnd=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),new THREE.MeshStandardMaterial({color:0x3a3830,roughness:0.95}));
+gnd.rotation.x=-Math.PI/2; gnd.position.set(0,-0.1,SHORE_Z-1500); tagShadows(gnd,false,true); scene.add(gnd);
 const ocean = createOcean(scene, { quality: isMobileGPU ? 'low' : 'high', timeOfDay: 'dusk' });
 
 /* ===== WINDOW TEXTURE GENERATOR (HD) ===== */
@@ -3653,7 +3654,7 @@ const _pushDir = new THREE.Vector3();
 /* Where the drone was at the previous collision pass. prevPos is already taken:
  * it is reset earlier in the same frame for the distance counter, so by the time
  * we run it equals the current position and is useless as a sweep origin. */
-const _sweepFrom = new THREE.Vector3();
+const _sweepFrom = new THREE.Vector3(0, 30, 0);   /* SPAWN, not the origin */
 const _segAB = new THREE.Vector3(), _segAP = new THREE.Vector3();
 const _segHit = new THREE.Vector3();
 
@@ -3680,7 +3681,13 @@ function droneCollisions(){
      * frame ever could. Sweeping across that jump would collide with everything
      * on the line, so treat any implausible step as a teleport and fall back to
      * a point test for this frame. 77 m/s at the 0.05 s dt clamp is under 4 m. */
-    if(_sweepFrom.distanceToSquared(dp) > 30*30) _sweepFrom.copy(dp);
+    /* A real frame moves the drone under 4 m (6 boosting), and the largest
+     * legitimate jump is a collision push of ~8 m. Anything past 15 m is a
+     * spawn or a battle-room offset. The old threshold was 30 m, which is
+     * exactly the spawn altitude — so on the very first frame the guard did not
+     * fire and the sweep ran a 30 m segment up from the origin through the
+     * middle of the city, ramming whatever was in that column. */
+    if(_sweepFrom.distanceToSquared(dp) > 15*15) _sweepFrom.copy(dp);
     const nearbyBldgs=getNearbyBuildings(dp.x, dp.z);
     for(const b of nearbyBldgs){
         const bb = b.bbox;
@@ -4394,6 +4401,7 @@ function startGame(){
     dbSetSetting('persona', selectedPersona).catch(()=>{});
     if(S.gameMode!=='multiplayer') disconnectOnlineRoom().catch(()=>{});
     resumeAudio();startEngine();resetState();drone.position.copy(SPAWN);drone.rotation.set(0,0,0);
+    _sweepFrom.copy(drone.position);
     if(S.gameMode==='multiplayer'){
         const spawnAngle = (hashString(`${onlineConfig.room}:${onlineClientId}`) % 6283) / 1000;
         drone.position.x += Math.cos(spawnAngle) * 24;
