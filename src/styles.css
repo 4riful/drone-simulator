@@ -285,6 +285,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
     font-size: 48px; margin-bottom: 10px; opacity: .7;
     color: var(--accent); animation: pauseIconPulse 2s ease-in-out infinite;
 }
+.pause-icon svg {
+    width: 44px; height: 44px;
+    fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round;
+}
 @keyframes pauseIconPulse {
     0%,100% { opacity: .6; transform: scale(1); }
     50% { opacity: 1; transform: scale(1.05); }
@@ -353,7 +357,23 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
     padding: 7px 11px;
 }
 #hud-tl p { font-size: 10px; margin-bottom: 1px; color: var(--muted); letter-spacing: .5px; line-height: 1.55; }
-#hud-tl .ico { display: inline-block; width: 16px; text-align: center; color: var(--dim); }
+#hud-tl .ico { width: 13px; height: 13px; color: var(--dim); }
+/* The HUD icons were Unicode symbols (U+23F1 stopwatch, U+26FD pump, ...).
+ * JetBrains Mono has no glyph for any of them, so they rendered as tofu or as a
+ * colour emoji from the system fallback — in practice you saw the value with
+ * nothing in front of it. Inline SVG renders the same everywhere. */
+svg.ico {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    vertical-align: -1px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: var(--dim);
+}
 .vk { color: var(--danger); }
 .vr { color: var(--accent-2); }
 .val { color: var(--text); font-weight: 700; }
@@ -363,7 +383,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
     background: var(--panel); border: 1px solid var(--line);
     padding: 7px 11px; font-size: 10px; color: var(--muted); line-height: 1.55;
 }
-#hud-tr .ico { display: inline-block; width: 16px; text-align: center; color: var(--dim); }
+#hud-tr .ico { width: 13px; height: 13px; color: var(--dim); }
 #hud-tr .val { color: var(--text); font-weight: 700; }
 #hud-tr .warn-fuel { color: var(--warn); }
 #hud-tr .warn-sys { color: var(--warn); animation: hpPulse .8s infinite; }
